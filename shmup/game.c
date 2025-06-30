@@ -27,4 +27,6 @@ void DrawGame(const Player* player) {
     ClearBackground(RAYWHITE);
     DrawRectangleRec(player->rect, player->color);
     DrawText("Use arrow keys to move the square", 10, 10, 20, DARKGRAY);
+    // Draw FPS counter in the top-right corner
+    DrawFPS(SCREEN_WIDTH - 100, 10);
 }

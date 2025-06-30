@@ -4,7 +4,7 @@
 int main()
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "shmup");
-    SetTargetFPS(60);
+    SetTargetFPS(999);
 
     Player player;
     InitGame(&player);
@@ -22,4 +22,3 @@ int main()
     CloseWindow();
     return 0;
 }
-//test
