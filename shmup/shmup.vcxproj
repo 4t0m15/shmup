@@ -126,8 +126,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="game.cpp" />
-    <ClCompile Include="shmup.cpp" />
+    <ClCompile Include="game.c" />
+    <ClCompile Include="shmup.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />

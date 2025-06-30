@@ -1,4 +1,3 @@
-#include <iostream>
 #include <raylib.h>
 #include "game.h"
 
@@ -8,15 +7,15 @@ int main()
     SetTargetFPS(60);
 
     Player player;
-    InitGame(player);
+    InitGame(&player);
 
     // Main game loop
     while (!WindowShouldClose())
     {
-        UpdateGame(player);
+        UpdateGame(&player);
 
         BeginDrawing();
-        DrawGame(player);
+        DrawGame(&player);
         EndDrawing();
     }
 
