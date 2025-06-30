@@ -1,24 +1,26 @@
 #include <iostream>
 #include <raylib.h>
+#include "game.h"
 
 int main()
 {
-    // Initialization
-    const int screenWidth = 800;
-    const int screenHeight = 450;
-    InitWindow(screenWidth, screenHeight, "Raylib Window");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "shmup");
+    SetTargetFPS(60);
+
+    Player player;
+    InitGame(player);
 
     // Main game loop
-    while (!WindowShouldClose())    // Detect window close button or ESC key
+    while (!WindowShouldClose())
     {
+        UpdateGame(player);
+
         BeginDrawing();
-        ClearBackground(RAYWHITE);
-        DrawText("testing", 190, 200, 20, LIGHTGRAY);
+        DrawGame(player);
         EndDrawing();
     }
 
-    // De-Initialization
-    CloseWindow();        // Close window and OpenGL context
+    CloseWindow();
     return 0;
 }
 //test
