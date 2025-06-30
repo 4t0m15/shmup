@@ -14,7 +14,7 @@ typedef struct Player {
 } Player;
 
 void InitGame(Player* player);
-void UpdateGame(Player* player);
+void UpdateGame(Player* player, float delta); // Modified to accept delta time
 void DrawGame(const Player* player);
 
 #endif // GAME_H

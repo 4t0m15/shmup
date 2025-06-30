@@ -4,7 +4,7 @@
 int main()
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "shmup");
-    SetTargetFPS(999);
+    SetTargetFPS(60);
 
     Player player;
     InitGame(&player);
@@ -12,7 +12,8 @@ int main()
     // Main game loop
     while (!WindowShouldClose())
     {
-        UpdateGame(&player);
+        float delta = GetFrameTime(); // Get time since last frame
+        UpdateGame(&player, delta);   // Pass delta time
 
         BeginDrawing();
         DrawGame(&player);

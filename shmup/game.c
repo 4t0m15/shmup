@@ -9,12 +9,13 @@ void InitGame(Player* player) {
     player->color = BLUE;
 }
 
-void UpdateGame(Player* player) {
-    // Move player with arrow keys
-    if (IsKeyDown(KEY_LEFT)) player->rect.x -= PLAYER_SPEED;
-    if (IsKeyDown(KEY_RIGHT)) player->rect.x += PLAYER_SPEED;
-    if (IsKeyDown(KEY_UP)) player->rect.y -= PLAYER_SPEED;
-    if (IsKeyDown(KEY_DOWN)) player->rect.y += PLAYER_SPEED;
+void UpdateGame(Player* player, float delta) {
+    // Move player with arrow keys (frame-rate independent)
+    float moveAmount = PLAYER_SPEED * 200.0f * delta; // 200 is a tuning factor for speed
+    if (IsKeyDown(KEY_LEFT)) player->rect.x -= moveAmount;
+    if (IsKeyDown(KEY_RIGHT)) player->rect.x += moveAmount;
+    if (IsKeyDown(KEY_UP)) player->rect.y -= moveAmount;
+    if (IsKeyDown(KEY_DOWN)) player->rect.y += moveAmount;
 
     // Prevent player from leaving the screen
     if (player->rect.x < 0) player->rect.x = 0;
