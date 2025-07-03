@@ -23,11 +23,37 @@
 #define MAX_ENEMY_BULLETS 20
 #define ENEMY_BULLET_SPEED 200.0f
 
+// Scoring constants (based on Galaga scoring system)
+#define SCORE_BEE_FORMATION 50
+#define SCORE_BEE_DIVE 100
+#define SCORE_BUTTERFLY_FORMATION 80
+#define SCORE_BUTTERFLY_DIVE 160
+#define SCORE_BOSS_FORMATION 150
+#define SCORE_BOSS_DIVE 400
+#define SCORE_BOSS_ESCORT_COMBO 1600
+#define SCORE_CAPTURED_SHIP_RESCUE 1000
+#define SCORE_BONUS_STAGE_PERFECT 10000
+#define SCORE_BONUS_STAGE_39 5000
+#define SCORE_BONUS_STAGE_38 2000
+#define SCORE_BONUS_STAGE_37 1000
+#define SCORE_BONUS_STAGE_36 500
+#define SCORE_BONUS_STAGE_BASE 100
+
+// Lives and extends
+#define STARTING_LIVES 3
+#define FIRST_EXTEND_SCORE 20000
+#define SECOND_EXTEND_SCORE 70000
+#define MAX_LIVES 5
+
 typedef struct Player {
     Rectangle rect;
     Color color;
     bool captured;          // For tractor beam mechanics
     Vector2 capture_target; // Target position when captured
+    bool dual_fire;         // For rescued ship mechanic
+    int lives;
+    bool extend_1_awarded;  // Track if first extend was awarded
+    bool extend_2_awarded;  // Track if second extend was awarded
 } Player;
 
 typedef struct Bullet {
@@ -42,9 +68,9 @@ typedef struct EnemyBullet {
 } EnemyBullet;
 
 typedef enum EnemyType {
-    NORMAL,
-    BOSS,
-    ESCORT
+    NORMAL,     // Bee (Zako)
+    BOSS,       // Boss Galaga
+    ESCORT      // Butterfly (Goei)
 } EnemyType;
 
 typedef enum EnemyState {
@@ -86,7 +112,18 @@ typedef struct Enemy {
     bool tractor_active;
     float tractor_angle;
     Vector2 tractor_center;
+    
+    // Scoring related
+    bool is_escort_in_combo; // For boss+escort combo scoring
+    int escort_group_id;     // Group ID for escort formations
 } Enemy;
+
+typedef struct ScorePopup {
+    Vector2 position;
+    int score;
+    float timer;
+    bool active;
+} ScorePopup;
 
 typedef struct GameState {
     Player player;
@@ -98,10 +135,35 @@ typedef struct GameState {
     int wave_number;
     float wave_timer;
     int boss_wave_interval; // Every N waves spawn a boss
+    
+    // Scoring system
+    int score;
+    int high_score;
+    ScorePopup score_popups[10]; // Visual score popups
+    
+    // Bonus stage tracking
+    bool is_bonus_stage;
+    int bonus_stage_enemies_hit;
+    int bonus_stage_total_enemies;
+    float bonus_stage_timer;
+    
+    // Combo tracking
+    bool boss_escort_combo_active;
+    int boss_escort_combo_count;
+    float combo_timer;
 } GameState;
 
 void InitGame(GameState* gameState);
 void UpdateGame(GameState* gameState, float delta);
 void DrawGame(const GameState* gameState);
+
+// Scoring functions
+void AddScore(GameState* gameState, int points, Vector2 position);
+void CheckForExtends(GameState* gameState);
+int CalculateEnemyScore(const Enemy* enemy);
+void HandleEnemyDestroy(GameState* gameState, int enemy_index, Vector2 position);
+void UpdateScorePopups(GameState* gameState, float delta);
+void SpawnBonusStage(GameState* gameState);
+void UpdateBonusStage(GameState* gameState, float delta);
 
 #endif // GAME_H

@@ -1,9 +1,13 @@
 #include "game.h"
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 // Mathematical constants
+#ifndef PI
 #define PI 3.14159265359f
+#endif
 #define TWO_PI 6.28318530718f
 
 // Helper function to check collision between circle and rectangle
@@ -461,11 +465,9 @@ static void CheckBulletEnemyCollisions(GameState* gameState) {
                 // Reduce enemy health
                 gameState->enemies[j].health--;
                 
-                // Deactivate enemy if health reaches 0
+                // Destroy enemy if health reaches 0
                 if (gameState->enemies[j].health <= 0) {
-                    gameState->enemies[j].active = false;
-                    gameState->enemies[j].tractor_active = false;
-                    gameState->player.captured = false;
+                    HandleEnemyDestroy(gameState, j, gameState->enemies[j].position);
                 }
                 break;
             }
@@ -488,12 +490,20 @@ static void SpawnEnemyWave(GameState* gameState) {
     if (!any_active) {
         gameState->wave_number++;
         
+        // Check if this should be a bonus stage (every 3rd wave)
+        if (gameState->wave_number % 3 == 0 && gameState->wave_number > 0) {
+            SpawnBonusStage(gameState);
+            return;
+        }
+        
         // Determine if this is a boss wave
         bool is_boss_wave = (gameState->wave_number % gameState->boss_wave_interval == 0);
         
         if (is_boss_wave) {
             // Spawn boss with escorts
             int boss_index = MAX_ENEMIES / 2;
+            int escort_group_id = gameState->wave_number; // Unique group ID
+            
             gameState->enemies[boss_index].type = BOSS;
             gameState->enemies[boss_index].health = 5;
             gameState->enemies[boss_index].formation_pos.x = SCREEN_WIDTH / 2.0f;
@@ -509,6 +519,8 @@ static void SpawnEnemyWave(GameState* gameState) {
             gameState->enemies[boss_index].active = true;
             gameState->enemies[boss_index].shooting = false;
             gameState->enemies[boss_index].tractor_active = false;
+            gameState->enemies[boss_index].is_escort_in_combo = false;
+            gameState->enemies[boss_index].escort_group_id = escort_group_id;
             
             // Spawn escorts
             for (int i = 0; i < 6; i++) {
@@ -522,6 +534,8 @@ static void SpawnEnemyWave(GameState* gameState) {
                 gameState->enemies[i].position.y = -ENEMY_SIZE - i * 30;
                 gameState->enemies[i].entry_start = gameState->enemies[i].position;
                 gameState->enemies[i].state = ENTERING;
+                gameState->enemies[i].is_escort_in_combo = true;
+                gameState->enemies[i].escort_group_id = escort_group_id;
                 
                 // Vary entry patterns
                 MovementPattern entry_patterns[] = {PATTERN_ARC, PATTERN_SWIRL, PATTERN_SPIRAL};
@@ -552,6 +566,8 @@ static void SpawnEnemyWave(GameState* gameState) {
                 gameState->enemies[i].position.y = -50.0f - row * spacing;
                 gameState->enemies[i].entry_start = gameState->enemies[i].position;
                 gameState->enemies[i].state = ENTERING;
+                gameState->enemies[i].is_escort_in_combo = false;
+                gameState->enemies[i].escort_group_id = 0;
                 
                 // Vary entry patterns for choreographed effect
                 MovementPattern entry_patterns[] = {PATTERN_ARC, PATTERN_SWIRL, PATTERN_SPIRAL};
@@ -575,9 +591,17 @@ void InitGame(GameState* gameState) {
     gameState->player.rect.height = PLAYER_SIZE;
     gameState->player.color = BLUE;
     gameState->player.captured = false;
+    gameState->player.dual_fire = false;
+    gameState->player.lives = STARTING_LIVES;
+    gameState->player.extend_1_awarded = false;
+    gameState->player.extend_2_awarded = false;
     
-    // Initialize background scroll position
+    // Initialize game state variables
+    gameState->wave_number = 0;
+    gameState->wave_timer = 0.0f;
+    gameState->boss_wave_interval = 4; // Boss every 4th wave
     gameState->backgroundScrollY = 0.0f;
+    gameState->shootCooldown = 0.0f;
     
     // Initialize bullets
     for (int i = 0; i < MAX_BULLETS; i++) {
@@ -589,25 +613,65 @@ void InitGame(GameState* gameState) {
         gameState->enemy_bullets[i].active = false;
     }
     
-    // Initialize shoot cooldown
-    gameState->shootCooldown = 0.0f;
-    
-    // Initialize wave system
-    gameState->wave_number = 0;
-    gameState->wave_timer = 0.0f;
-    gameState->boss_wave_interval = 3; // Every 3 waves
-
-    // Initialize enemies (will be spawned by wave system)
+    // Initialize enemies
     for (int i = 0; i < MAX_ENEMIES; i++) {
         gameState->enemies[i].active = false;
+        gameState->enemies[i].state = INACTIVE;
+        gameState->enemies[i].health = 1;
+        gameState->enemies[i].shooting = false;
         gameState->enemies[i].tractor_active = false;
+        gameState->enemies[i].is_escort_in_combo = false;
+        gameState->enemies[i].escort_group_id = 0;
+        gameState->enemies[i].timer = 0.0f;
+        gameState->enemies[i].pattern_progress = 0.0f;
+        gameState->enemies[i].pattern_param = 0.0f;
+        gameState->enemies[i].shoot_timer = 0.0f;
+        gameState->enemies[i].tractor_angle = 0.0f;
     }
     
-    // Spawn first wave
-    SpawnEnemyWave(gameState);
+    // Initialize scoring system
+    gameState->score = 0;
+    gameState->high_score = 0;
+    for (int i = 0; i < 10; i++) {
+        gameState->score_popups[i].active = false;
+    }
+    
+    // Initialize bonus stage tracking
+    gameState->is_bonus_stage = false;
+    gameState->bonus_stage_enemies_hit = 0;
+    gameState->bonus_stage_total_enemies = 0;
+    gameState->bonus_stage_timer = 0.0f;
+    
+    // Initialize combo tracking
+    gameState->boss_escort_combo_active = false;
+    gameState->boss_escort_combo_count = 0;
+    gameState->combo_timer = 0.0f;
 }
 
 void UpdateGame(GameState* gameState, float delta) {
+    // Update score popups
+    UpdateScorePopups(gameState, delta);
+    
+    // Update bonus stage if active
+    if (gameState->is_bonus_stage) {
+        UpdateBonusStage(gameState, delta);
+        
+        // In bonus stage, enemies don't shoot or collide with player
+        // And they follow predictable patterns
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            if (gameState->enemies[i].active) {
+                gameState->enemies[i].position.x += 50.0f * delta;
+                gameState->enemies[i].position.y += sinf(gameState->enemies[i].timer) * 30.0f * delta;
+                gameState->enemies[i].timer += delta;
+                
+                // Remove enemies that go off screen
+                if (gameState->enemies[i].position.x > SCREEN_WIDTH + 50) {
+                    gameState->enemies[i].active = false;
+                }
+            }
+        }
+    }
+    
     // Player movement (reduced if captured by tractor beam)
     float move_reduction = gameState->player.captured ? 0.3f : 1.0f;
     float moveAmount = PLAYER_SPEED * 200.0f * delta * move_reduction;
@@ -630,17 +694,29 @@ void UpdateGame(GameState* gameState, float delta) {
         gameState->shootCooldown -= delta;
     }
     
-    // Handle shooting
+    // Handle shooting (dual fire if rescued)
     if (IsKeyDown(KEY_SPACE) && gameState->shootCooldown <= 0.0f) {
-        // Find an inactive bullet to use
-        for (int i = 0; i < MAX_BULLETS; i++) {
+        // Find inactive bullets to use
+        int bullets_fired = 0;
+        int max_bullets = gameState->player.dual_fire ? 2 : 1;
+        
+        for (int i = 0; i < MAX_BULLETS && bullets_fired < max_bullets; i++) {
             if (!gameState->bullets[i].active) {
                 gameState->bullets[i].active = true;
                 gameState->bullets[i].position.x = gameState->player.rect.x + gameState->player.rect.width / 2.0f;
                 gameState->bullets[i].position.y = gameState->player.rect.y;
-                gameState->shootCooldown = 0.2f;
-                break;
+                
+                // Spread bullets if dual fire
+                if (gameState->player.dual_fire) {
+                    gameState->bullets[i].position.x += (bullets_fired == 0) ? -10.0f : 10.0f;
+                }
+                
+                bullets_fired++;
             }
+        }
+        
+        if (bullets_fired > 0) {
+            gameState->shootCooldown = 0.15f; // Slightly faster firing for dual fire
         }
     }
     
@@ -656,30 +732,45 @@ void UpdateGame(GameState* gameState, float delta) {
         }
     }
     
-    // Update enemies
-    UpdateEnemies(gameState, delta);
+    // Skip normal enemy updates during bonus stage
+    if (!gameState->is_bonus_stage) {
+        // Update enemies
+        UpdateEnemies(gameState, delta);
+        
+        // Update enemy bullets
+        UpdateEnemyBullets(gameState, delta);
+        
+        // Check player-enemy collisions
+        bool player_hit = CheckPlayerEnemyCollisions(gameState);
+        if (player_hit && !gameState->player.captured) {
+            // Player loses a life
+            gameState->player.lives--;
+            gameState->player.color = (Color){255, 100, 100, 255};
+            
+            // Reset player position
+            gameState->player.rect.x = SCREEN_WIDTH / 2.0f - PLAYER_SIZE / 2.0f;
+            gameState->player.rect.y = SCREEN_HEIGHT - 80.0f;
+            
+            // Game over check
+            if (gameState->player.lives <= 0) {
+                // Reset game
+                InitGame(gameState);
+            }
+        } else if (!gameState->player.captured) {
+            gameState->player.color = BLUE;
+        }
+        
+        // Special color when captured
+        if (gameState->player.captured) {
+            gameState->player.color = (Color){255, 255, 100, 255}; // Yellow when captured
+        }
+        
+        // Spawn new wave if needed
+        SpawnEnemyWave(gameState);
+    }
     
-    // Update enemy bullets
-    UpdateEnemyBullets(gameState, delta);
-    
-    // Check collisions
+    // Check collisions (works in both normal and bonus stages)
     CheckBulletEnemyCollisions(gameState);
-    
-    // Check player-enemy collisions
-    bool player_hit = CheckPlayerEnemyCollisions(gameState);
-    if (player_hit && !gameState->player.captured) {
-        gameState->player.color = (Color){255, 100, 100, 255};
-    } else if (!gameState->player.captured) {
-        gameState->player.color = BLUE;
-    }
-    
-    // Special color when captured
-    if (gameState->player.captured) {
-        gameState->player.color = (Color){255, 255, 100, 255}; // Yellow when captured
-    }
-    
-    // Spawn new wave if needed
-    SpawnEnemyWave(gameState);
     
     // Update background scrolling
     gameState->backgroundScrollY += BACKGROUND_SCROLL_SPEED * delta;
@@ -790,24 +881,91 @@ void DrawGame(const GameState* gameState) {
         }
     }
     
-    // Draw enemy bullets
-    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
-        if (gameState->enemy_bullets[i].active) {
-            DrawCircle((int)gameState->enemy_bullets[i].position.x, 
-                      (int)gameState->enemy_bullets[i].position.y, 
-                      BULLET_SIZE, RED);
+    // Draw enemy bullets (only in normal stages)
+    if (!gameState->is_bonus_stage) {
+        for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
+            if (gameState->enemy_bullets[i].active) {
+                DrawCircle((int)gameState->enemy_bullets[i].position.x, 
+                          (int)gameState->enemy_bullets[i].position.y, 
+                          BULLET_SIZE, RED);
+            }
         }
     }
     
     // Draw player
     DrawRectangleRec(gameState->player.rect, gameState->player.color);
     
+    // Draw dual fire indicator
+    if (gameState->player.dual_fire) {
+        DrawCircle((int)(gameState->player.rect.x + gameState->player.rect.width / 2.0f - 15), 
+                  (int)(gameState->player.rect.y + gameState->player.rect.height / 2.0f), 
+                  3, YELLOW);
+        DrawCircle((int)(gameState->player.rect.x + gameState->player.rect.width / 2.0f + 15), 
+                  (int)(gameState->player.rect.y + gameState->player.rect.height / 2.0f), 
+                  3, YELLOW);
+    }
+    
+    // Draw score popups
+    for (int i = 0; i < 10; i++) {
+        if (gameState->score_popups[i].active) {
+            Color popup_color = YELLOW;
+            char score_text[32];
+            
+            if (gameState->score_popups[i].score == -1) {
+                const char* extra_life_text = "EXTRA LIFE";
+                int text_len = strlen(extra_life_text);
+                if (text_len < 31) {
+                    for (int j = 0; j < text_len; j++) {
+                        score_text[j] = extra_life_text[j];
+                    }
+                    score_text[text_len] = '\0';
+                } else {
+                    score_text[0] = '\0';
+                }
+                popup_color = GREEN;
+            } else {
+                snprintf(score_text, sizeof(score_text), "%d", gameState->score_popups[i].score);
+            }
+            
+            // Fade out over time
+            float alpha = gameState->score_popups[i].timer / 2.0f;
+            popup_color.a = (unsigned char)(255 * alpha);
+            
+            DrawText(score_text, 
+                    (int)gameState->score_popups[i].position.x, 
+                    (int)gameState->score_popups[i].position.y, 
+                    16, popup_color);
+        }
+    }
+    
     // Draw UI
-    DrawText("Use arrow keys to move. Press SPACE to shoot.", 10, 10, 20, LIGHTGRAY);
-    DrawText(TextFormat("Wave: %d", gameState->wave_number), 10, 35, 20, LIGHTGRAY);
+    DrawText("SCORE", 10, 10, 16, WHITE);
+    DrawText(TextFormat("%08d", gameState->score), 10, 30, 16, YELLOW);
+    
+    DrawText("HIGH SCORE", 10, 55, 16, WHITE);
+    DrawText(TextFormat("%08d", gameState->high_score), 10, 75, 16, YELLOW);
+    
+    DrawText("LIVES", 10, 100, 16, WHITE);
+    for (int i = 0; i < gameState->player.lives; i++) {
+        DrawRectangle(10 + i * 20, 120, 15, 15, BLUE);
+    }
+    
+    DrawText(TextFormat("Wave: %d", gameState->wave_number), 10, 145, 16, LIGHTGRAY);
+    
+    // Special UI for bonus stage
+    if (gameState->is_bonus_stage) {
+        DrawText("BONUS STAGE", SCREEN_WIDTH / 2 - 80, 50, 20, GOLD);
+        DrawText(TextFormat("Time: %.1f", gameState->bonus_stage_timer), SCREEN_WIDTH / 2 - 50, 75, 16, YELLOW);
+        DrawText(TextFormat("Hits: %d/%d", gameState->bonus_stage_enemies_hit, gameState->bonus_stage_total_enemies), 
+                SCREEN_WIDTH / 2 - 50, 95, 16, YELLOW);
+    }
     
     if (gameState->player.captured) {
         DrawText("CAPTURED BY TRACTOR BEAM!", SCREEN_WIDTH / 2 - 150, SCREEN_HEIGHT / 2, 20, YELLOW);
+    }
+    
+    if (gameState->player.dual_fire) {
+        DrawText("DUAL FIRE", SCREEN_WIDTH - 120, 120, 16, YELLOW);
     }
     
     // Count active enemies for display
@@ -821,8 +979,253 @@ void DrawGame(const GameState* gameState) {
         }
     }
     
-    DrawText(TextFormat("Enemies: %d %s", active_enemies, boss_count > 0 ? "(BOSS WAVE)" : ""), 10, 60, 20, LIGHTGRAY);
+    DrawText(TextFormat("Enemies: %d %s", active_enemies, boss_count > 0 ? "(BOSS WAVE)" : ""), 
+             10, 170, 16, LIGHTGRAY);
+    
+    // Draw controls
+    DrawText("Arrow keys: Move | SPACE: Shoot", 10, SCREEN_HEIGHT - 30, 14, LIGHTGRAY);
     
     // Draw FPS counter
     DrawFPS(SCREEN_WIDTH - 100, 10);
+}
+
+// Scoring functions implementation
+void AddScore(GameState* gameState, int points, Vector2 position) {
+    gameState->score += points;
+    
+    // Update high score if necessary
+    if (gameState->score > gameState->high_score) {
+        gameState->high_score = gameState->score;
+    }
+    
+    // Create score popup
+    for (int i = 0; i < 10; i++) {
+        if (!gameState->score_popups[i].active) {
+            gameState->score_popups[i].position = position;
+            gameState->score_popups[i].score = points;
+            gameState->score_popups[i].timer = 2.0f;
+            gameState->score_popups[i].active = true;
+            break;
+        }
+    }
+    
+    // Check for extends
+    CheckForExtends(gameState);
+}
+
+void CheckForExtends(GameState* gameState) {
+    // First extend at 20,000 points
+    if (!gameState->player.extend_1_awarded && gameState->score >= FIRST_EXTEND_SCORE) {
+        gameState->player.extend_1_awarded = true;
+        if (gameState->player.lives < MAX_LIVES) {
+            gameState->player.lives++;
+            // Add popup for extra life
+            Vector2 center = {SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f};
+            AddScore(gameState, 0, center); // This will just create a popup slot
+            // Override the popup to show "EXTRA LIFE"
+            for (int i = 0; i < 10; i++) {
+                if (gameState->score_popups[i].active && gameState->score_popups[i].score == 0) {
+                    gameState->score_popups[i].score = -1; // Special code for extra life
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Second extend at 70,000 points
+    if (!gameState->player.extend_2_awarded && gameState->score >= SECOND_EXTEND_SCORE) {
+        gameState->player.extend_2_awarded = true;
+        if (gameState->player.lives < MAX_LIVES) {
+            gameState->player.lives++;
+            // Add popup for extra life
+            Vector2 center = {SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f};
+            AddScore(gameState, 0, center); // This will just create a popup slot
+            // Override the popup to show "EXTRA LIFE"
+            for (int i = 0; i < 10; i++) {
+                if (gameState->score_popups[i].active && gameState->score_popups[i].score == 0) {
+                    gameState->score_popups[i].score = -1; // Special code for extra life
+                    break;
+                }
+            }
+        }
+    }
+}
+
+int CalculateEnemyScore(const Enemy* enemy) {
+    switch (enemy->type) {
+        case NORMAL: // Bee (Zako)
+            return (enemy->state == ATTACKING || enemy->state == SPECIAL_ATTACK) ? 
+                   SCORE_BEE_DIVE : SCORE_BEE_FORMATION;
+        case ESCORT: // Butterfly (Goei)
+            return (enemy->state == ATTACKING || enemy->state == SPECIAL_ATTACK) ? 
+                   SCORE_BUTTERFLY_DIVE : SCORE_BUTTERFLY_FORMATION;
+        case BOSS: // Boss Galaga
+            return (enemy->state == ATTACKING || enemy->state == SPECIAL_ATTACK) ? 
+                   SCORE_BOSS_DIVE : SCORE_BOSS_FORMATION;
+        default:
+            return 50;
+    }
+}
+
+void HandleEnemyDestroy(GameState* gameState, int enemy_index, Vector2 position) {
+    Enemy* enemy = &gameState->enemies[enemy_index];
+    int base_score = CalculateEnemyScore(enemy);
+    
+    // Check for boss + escort combo
+    if (enemy->type == BOSS && enemy->is_escort_in_combo) {
+        // Check if all escorts in the combo were destroyed
+        bool all_escorts_destroyed = true;
+        
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            if (gameState->enemies[i].active && 
+                gameState->enemies[i].escort_group_id == enemy->escort_group_id &&
+                gameState->enemies[i].type == ESCORT) {
+                all_escorts_destroyed = false;
+                break;
+            }
+        }
+        
+        if (all_escorts_destroyed) {
+            // Award combo bonus
+            AddScore(gameState, SCORE_BOSS_ESCORT_COMBO, position);
+        } else {
+            AddScore(gameState, base_score, position);
+        }
+    } else if (enemy->type == ESCORT && enemy->is_escort_in_combo) {
+        // Check if this completes a boss+escort combo
+        bool boss_still_alive = false;
+        bool other_escorts_alive = false;
+        
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            if (gameState->enemies[i].active && 
+                gameState->enemies[i].escort_group_id == enemy->escort_group_id) {
+                if (gameState->enemies[i].type == BOSS) {
+                    boss_still_alive = true;
+                } else if (gameState->enemies[i].type == ESCORT && i != enemy_index) {
+                    other_escorts_alive = true;
+                }
+            }
+        }
+        
+        if (!other_escorts_alive && boss_still_alive) {
+            // This was the last escort - mark boss for combo potential
+            for (int i = 0; i < MAX_ENEMIES; i++) {
+                if (gameState->enemies[i].active && 
+                    gameState->enemies[i].escort_group_id == enemy->escort_group_id &&
+                    gameState->enemies[i].type == BOSS) {
+                    gameState->enemies[i].is_escort_in_combo = true;
+                    break;
+                }
+            }
+        }
+        
+        AddScore(gameState, base_score, position);
+    } else {
+        // Normal scoring
+        AddScore(gameState, base_score, position);
+    }
+    
+    // Handle captured ship rescue
+    if (enemy->type == BOSS && enemy->tractor_active && gameState->player.captured) {
+        AddScore(gameState, SCORE_CAPTURED_SHIP_RESCUE, position);
+        gameState->player.dual_fire = true;
+        gameState->player.captured = false;
+    }
+    
+    // Handle bonus stage scoring
+    if (gameState->is_bonus_stage) {
+        gameState->bonus_stage_enemies_hit++;
+    }
+    
+    // Deactivate enemy
+    enemy->active = false;
+    enemy->tractor_active = false;
+}
+
+void UpdateScorePopups(GameState* gameState, float delta) {
+    for (int i = 0; i < 10; i++) {
+        if (gameState->score_popups[i].active) {
+            gameState->score_popups[i].timer -= delta;
+            gameState->score_popups[i].position.y -= 30.0f * delta; // Float upward
+            
+            if (gameState->score_popups[i].timer <= 0.0f) {
+                gameState->score_popups[i].active = false;
+            }
+        }
+    }
+}
+
+void SpawnBonusStage(GameState* gameState) {
+    gameState->is_bonus_stage = true;
+    gameState->bonus_stage_enemies_hit = 0;
+    gameState->bonus_stage_total_enemies = 0;
+    gameState->bonus_stage_timer = 10.0f; // 10 seconds for bonus stage
+    
+    // Spawn enemies in predictable patterns (no shooting, no collision)
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        gameState->enemies[i].active = true;
+        gameState->enemies[i].type = NORMAL;
+        gameState->enemies[i].health = 1;
+        gameState->enemies[i].state = ATTACKING;
+        gameState->enemies[i].pattern = PATTERN_ARC;
+        gameState->enemies[i].pattern_progress = 0.0f;
+        gameState->enemies[i].pattern_param = (i % 2 == 0) ? 1.0f : -1.0f;
+        gameState->enemies[i].shooting = false;
+        gameState->enemies[i].tractor_active = false;
+        gameState->enemies[i].is_escort_in_combo = false;
+        gameState->enemies[i].escort_group_id = 0;
+        
+        // Set starting positions for predictable movement
+        gameState->enemies[i].position.x = -50.0f + (i * 30.0f);
+        gameState->enemies[i].position.y = 50.0f + (i % 3) * 40.0f;
+        gameState->enemies[i].attack_start = gameState->enemies[i].position;
+        gameState->enemies[i].timer = i * 0.2f;
+        
+        gameState->bonus_stage_total_enemies++;
+    }
+}
+
+void UpdateBonusStage(GameState* gameState, float delta) {
+    if (!gameState->is_bonus_stage) return;
+    
+    gameState->bonus_stage_timer -= delta;
+    
+    // Check if bonus stage is complete
+    bool all_enemies_destroyed = true;
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        if (gameState->enemies[i].active) {
+            all_enemies_destroyed = false;
+            break;
+        }
+    }
+    
+    if (all_enemies_destroyed || gameState->bonus_stage_timer <= 0.0f) {
+        // Calculate bonus score
+        int bonus_score = 0;
+        Vector2 center = {SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f};
+        
+        if (gameState->bonus_stage_enemies_hit >= 40) {
+            bonus_score = SCORE_BONUS_STAGE_PERFECT;
+        } else if (gameState->bonus_stage_enemies_hit == 39) {
+            bonus_score = SCORE_BONUS_STAGE_39;
+        } else if (gameState->bonus_stage_enemies_hit == 38) {
+            bonus_score = SCORE_BONUS_STAGE_38;
+        } else if (gameState->bonus_stage_enemies_hit == 37) {
+            bonus_score = SCORE_BONUS_STAGE_37;
+        } else if (gameState->bonus_stage_enemies_hit == 36) {
+            bonus_score = SCORE_BONUS_STAGE_36;
+        } else {
+            bonus_score = gameState->bonus_stage_enemies_hit * SCORE_BONUS_STAGE_BASE;
+        }
+        
+        AddScore(gameState, bonus_score, center);
+        
+        // End bonus stage
+        gameState->is_bonus_stage = false;
+        
+        // Clear any remaining enemies
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            gameState->enemies[i].active = false;
+        }
+    }
 }
