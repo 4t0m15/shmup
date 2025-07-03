@@ -15,6 +15,22 @@
 #endif
 #define TWO_PI 6.28318530718f
 
+// Helper functions for movement patterns
+static Vector2 Lerp(Vector2 start, Vector2 end, float t) {
+    Vector2 result;
+    result.x = start.x + t * (end.x - start.x);
+    result.y = start.y + t * (end.y - start.y);
+    return result;
+}
+
+static Vector2 BezierQuad(Vector2 start, Vector2 control, Vector2 end, float t) {
+    Vector2 result;
+    float inv_t = 1.0f - t;
+    result.x = inv_t * inv_t * start.x + 2 * inv_t * t * control.x + t * t * end.x;
+    result.y = inv_t * inv_t * start.y + 2 * inv_t * t * control.y + t * t * end.y;
+    return result;
+}
+
 // Helper function to check collision between circle and rectangle
 static bool CheckCollisionCircleRec(Vector2 center, float radius, Rectangle rec) {
     float dx = center.x - (rec.x + rec.width / 2.0f);
@@ -33,6 +49,21 @@ static bool CheckCollisionCircleRec(Vector2 center, float radius, Rectangle rec)
     dy = center.y - closest_y;
     
     return (dx * dx + dy * dy) <= (radius * radius);
+}
+
+// Helper function to check collision between bullet and rectangle
+static bool CheckCollisionBulletRec(Vector2 bullet_pos, Rectangle rec, bool is_player_bullet) {
+    float bullet_width = is_player_bullet ? 4.0f : 3.0f;
+    float bullet_length = is_player_bullet ? 12.0f : 10.0f;
+    
+    Rectangle bullet_rect = {
+        bullet_pos.x - bullet_width / 2.0f,
+        bullet_pos.y - bullet_length / 2.0f,
+        bullet_width,
+        bullet_length
+    };
+    
+    return CheckCollisionRecs(bullet_rect, rec);
 }
 
 // Enhanced movement pattern calculations
@@ -69,11 +100,7 @@ static Vector2 CalculateMovementPattern(Enemy* enemy, float delta) {
                 (start.y + target.y) / 2.0f - 50.0f
             };
             
-            float t = enemy->pattern_progress;
-            float inv_t = 1.0f - t;
-            
-            new_pos.x = inv_t * inv_t * start.x + 2 * inv_t * t * control.x + t * t * target.x;
-            new_pos.y = inv_t * inv_t * start.y + 2 * inv_t * t * control.y + t * t * target.y;
+            new_pos = BezierQuad(start, control, target, enemy->pattern_progress);
             break;
         }
         
@@ -106,27 +133,25 @@ static Vector2 CalculateMovementPattern(Enemy* enemy, float delta) {
             enemy->pattern_progress += delta * 1.0f;
             if (enemy->pattern_progress > 1.0f) enemy->pattern_progress = 1.0f;
             
-            float loop_radius = 60.0f;
-            float angle = enemy->pattern_progress * TWO_PI;
-            
             Vector2 loop_center = {
                 enemy->attack_start.x + (enemy->position.x - enemy->attack_start.x) * 0.5f,
                 enemy->attack_start.y + 100.0f
             };
             
-            new_pos.x = loop_center.x + cosf(angle) * loop_radius;
-            new_pos.y = loop_center.y + sinf(angle) * loop_radius + enemy->pattern_progress * 150.0f;
+            new_pos = BezierQuad(
+                loop_center,
+                (Vector2){ loop_center.x + LOOP_RADIUS, loop_center.y },
+                (Vector2){ loop_center.x, loop_center.y + LOOP_RADIUS },
+                enemy->pattern_progress
+            );
             break;
         }
         
         case PATTERN_BEAM: {
             // Straight beam attack for boss
             enemy->pattern_progress += delta * 0.8f;
-            Vector2 target = {enemy->attack_start.x, SCREEN_HEIGHT + 100};
-            
-            float t = enemy->pattern_progress;
-            new_pos.x = enemy->attack_start.x * (1.0f - t) + target.x * t;
-            new_pos.y = enemy->attack_start.y * (1.0f - t) + target.y * t;
+            Vector2 target = { enemy->attack_start.x, SCREEN_HEIGHT + 100 };
+            new_pos = Lerp(enemy->attack_start, target, enemy->pattern_progress);
             break;
         }
         
@@ -134,12 +159,10 @@ static Vector2 CalculateMovementPattern(Enemy* enemy, float delta) {
             // Curved attack pattern
             enemy->pattern_progress += delta * 1.2f;
             float curve_strength = sinf(enemy->pattern_progress * PI * 2.0f) * 80.0f;
-            
-            Vector2 target = {enemy->attack_start.x, SCREEN_HEIGHT + 50};
-            float t = enemy->pattern_progress;
-            
-            new_pos.x = enemy->attack_start.x * (1.0f - t) + target.x * t + curve_strength * enemy->pattern_param;
-            new_pos.y = enemy->attack_start.y * (1.0f - t) + target.y * t;
+            Vector2 target = { enemy->attack_start.x, SCREEN_HEIGHT + 50 };
+            Vector2 linear = Lerp(enemy->attack_start, target, enemy->pattern_progress);
+            new_pos.x = linear.x + curve_strength * enemy->pattern_param;
+            new_pos.y = linear.y;
             break;
         }
     }
@@ -438,8 +461,8 @@ static void UpdateEnemyBullets(GameState* gameState, float delta) {
             gameState->enemy_bullets[i].active = false;
         }
         
-        // Check collision with player
-        if (CheckCollisionCircleRec(gameState->enemy_bullets[i].position, BULLET_SIZE, gameState->player.rect)) {
+        // Check collision with player using new bullet collision detection
+        if (CheckCollisionBulletRec(gameState->enemy_bullets[i].position, gameState->player.rect, false)) {
             gameState->enemy_bullets[i].active = false;
             
             // Only reduce lives if not captured (captured players are protected)
@@ -476,7 +499,7 @@ static void CheckBulletEnemyCollisions(GameState* gameState) {
                 enemy_size
             };
             
-            if (CheckCollisionCircleRec(gameState->bullets[i].position, BULLET_SIZE, enemy_rect)) {
+            if (CheckCollisionBulletRec(gameState->bullets[i].position, enemy_rect, true)) {
                 // Hit! Deactivate bullet
                 gameState->bullets[i].active = false;
                 
@@ -816,6 +839,61 @@ void UpdateGame(GameState* gameState, float delta) {
     }
 }
 
+// Function to draw a bullet with realistic appearance
+static void DrawBullet(Vector2 position, Color color, bool is_player_bullet) {
+    if (is_player_bullet) {
+        // Player bullets: elongated with bright tip
+        float bullet_length = 12.0f;
+        float bullet_width = 4.0f;
+        
+        // Draw main body (rectangle)
+        DrawRectangle(
+            (int)(position.x - bullet_width / 2.0f),
+            (int)(position.y - bullet_length / 2.0f),
+            (int)bullet_width,
+            (int)bullet_length,
+            color
+        );
+        
+        // Draw bright tip (smaller rectangle)
+        DrawRectangle(
+            (int)(position.x - bullet_width / 4.0f),
+            (int)(position.y - bullet_length / 2.0f),
+            (int)(bullet_width / 2.0f),
+            (int)(bullet_length / 3.0f),
+            WHITE
+        );
+        
+        // Draw subtle glow effect
+        DrawCircle((int)position.x, (int)position.y, bullet_width, (Color){color.r, color.g, color.b, 60});
+    } else {
+        // Enemy bullets: different shape, more menacing
+        float bullet_length = 10.0f;
+        float bullet_width = 3.0f;
+        
+        // Draw main body (rectangle)
+        DrawRectangle(
+            (int)(position.x - bullet_width / 2.0f),
+            (int)(position.y - bullet_length / 2.0f),
+            (int)bullet_width,
+            (int)bullet_length,
+            color
+        );
+        
+        // Draw darker tip
+        DrawRectangle(
+            (int)(position.x - bullet_width / 4.0f),
+            (int)(position.y + bullet_length / 4.0f),
+            (int)(bullet_width / 2.0f),
+            (int)(bullet_length / 3.0f),
+            (Color){color.r / 2, color.g / 2, color.b / 2, 255}
+        );
+        
+        // Draw subtle red glow for enemy bullets
+        DrawCircle((int)position.x, (int)position.y, bullet_width + 1, (Color){255, 100, 100, 40});
+    }
+}
+
 void DrawGame(const GameState* gameState) {
     switch (gameState->screen_state) {
         case PLAYING:
@@ -911,22 +989,18 @@ void DrawGame(const GameState* gameState) {
                 }
             }
             
-            // Draw bullets
+            // Draw player bullets with realistic appearance
             for (int i = 0; i < MAX_BULLETS; i++) {
                 if (gameState->bullets[i].active) {
-                    DrawCircle((int)gameState->bullets[i].position.x, 
-                              (int)gameState->bullets[i].position.y, 
-                              BULLET_SIZE, YELLOW);
+                    DrawBullet(gameState->bullets[i].position, YELLOW, true);
                 }
             }
             
-            // Draw enemy bullets (only in normal stages)
+            // Draw enemy bullets with different appearance (only in normal stages)
             if (!gameState->is_bonus_stage) {
                 for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
                     if (gameState->enemy_bullets[i].active) {
-                        DrawCircle((int)gameState->enemy_bullets[i].position.x, 
-                                  (int)gameState->enemy_bullets[i].position.y, 
-                                  BULLET_SIZE, RED);
+                        DrawBullet(gameState->enemy_bullets[i].position, RED, false);
                     }
                 }
             }

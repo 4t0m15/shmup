@@ -22,6 +22,7 @@
 #define TRACTOR_BEAM_STRENGTH 150.0f
 #define MAX_ENEMY_BULLETS 20
 #define ENEMY_BULLET_SPEED 200.0f
+#define LOOP_RADIUS 60.0f
 
 // Scoring constants (based on Galaga scoring system)
 #define SCORE_BEE_FORMATION 50
