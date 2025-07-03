@@ -12,6 +12,12 @@
 #define MAX_BULLETS 10
 #define BULLET_SPEED 400.0f
 #define BULLET_SIZE 5
+#define MAX_ENEMIES 16
+#define ENEMY_SIZE 25
+#define ENEMY_FORMATION_SPEED 100.0f
+#define ENEMY_ATTACK_SPEED 200.0f
+#define ENEMY_SWAY_AMPLITUDE 15.0f
+#define ENEMY_ATTACK_CHANCE 2 // Percentage chance per frame when timer expires
 
 typedef struct Player {
     Rectangle rect;
@@ -23,11 +29,27 @@ typedef struct Bullet {
     bool active;
 } Bullet;
 
+typedef enum EnemyState {
+    INACTIVE,  // Not on screen
+    ENTERING,  // Moving into formation
+    FORMATION, // In formation, moving with the group
+    ATTACKING  // Diving/attacking the player
+} EnemyState;
+
+typedef struct Enemy {
+    Vector2 position;       // Current position
+    Vector2 formation_pos;  // Target position in the formation
+    EnemyState state;
+    float timer;            // For state transitions or movement patterns
+    bool active;
+} Enemy;
+
 typedef struct GameState {
     Player player;
     float backgroundScrollY; // Y position for scrolling background
     Bullet bullets[MAX_BULLETS];
     float shootCooldown;
+    Enemy enemies[MAX_ENEMIES];
 } GameState;
 
 void InitGame(GameState* gameState);

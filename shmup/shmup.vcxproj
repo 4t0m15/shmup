@@ -137,6 +137,9 @@
   <ItemGroup>
     <Image Include="..\..\..\..\Downloads\Legacy Collection\Legacy Collection\Assets\Environments\Underwater Fantasy\PNG\underwater-fantasy-preview.png" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\Audacity\shoot.ogg" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
