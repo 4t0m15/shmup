@@ -45,6 +45,12 @@
 #define SECOND_EXTEND_SCORE 70000
 #define MAX_LIVES 5
 
+// Game states
+typedef enum GameScreenState {
+    PLAYING,
+    GAME_OVER
+} GameScreenState;
+
 typedef struct Player {
     Rectangle rect;
     Color color;
@@ -151,11 +157,24 @@ typedef struct GameState {
     bool boss_escort_combo_active;
     int boss_escort_combo_count;
     float combo_timer;
+    
+    // Game state management
+    GameScreenState screen_state;
+    float game_over_timer;  // Timer for game over screen
 } GameState;
 
 void InitGame(GameState* gameState);
 void UpdateGame(GameState* gameState, float delta);
 void DrawGame(const GameState* gameState);
+
+// Game state functions
+void HandleGameOver(GameState* gameState);
+void UpdateGameOver(GameState* gameState, float delta);
+void DrawGameOver(const GameState* gameState);
+
+// High score functions
+void LoadHighScore(GameState* gameState);
+void SaveHighScore(const GameState* gameState);
 
 // Scoring functions
 void AddScore(GameState* gameState, int points, Vector2 position);
