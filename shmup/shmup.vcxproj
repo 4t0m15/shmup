@@ -126,8 +126,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="collision.c" />
+    <ClCompile Include="enemy.c" />
+    <ClCompile Include="enemy_ai.c" />
     <ClCompile Include="game.c" />
+    <ClCompile Include="menu.c" />
+    <ClCompile Include="player.c" />
+    <ClCompile Include="render.c" />
+    <ClCompile Include="score.c" />
     <ClCompile Include="shmup.c" />
+    <ClCompile Include="utils.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />
