@@ -3,8 +3,14 @@
 #include <stdlib.h>
 #include <time.h>
 
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
 // Function to seed the random number generator
 void SeedRandomGenerator(GameState* gameState) {
+    if (!gameState) return;
+    
     // Seed the random number generator with current time
     // This ensures different random sequences each game
     gameState->random_seed = (unsigned int)time(NULL);
@@ -29,6 +35,8 @@ Vector2 BezierQuad(Vector2 start, Vector2 control, Vector2 end, float t) {
 
 // Enhanced movement pattern calculations with aggression scaling
 Vector2 CalculateMovementPattern(Enemy* enemy, float delta) {
+    if (!enemy) return (Vector2){0, 0};
+    
     Vector2 new_pos = enemy->position;
     float speed_multiplier = enemy->aggression_multiplier;
     

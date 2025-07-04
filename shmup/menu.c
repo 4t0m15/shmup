@@ -2,52 +2,23 @@
 #include <stdio.h>
 #include <string.h>
 
-// Forward declarations for menu drawing functions
-void DrawMainMenu(const GameState* gameState);
-void DrawOptionsMenu(const GameState* gameState);
-void DrawCreditsMenu(const GameState* gameState);
-void DrawInstructions(const GameState* gameState);
+// =============================================================================
+// FORWARD DECLARATIONS
+// =============================================================================
 
-// Initialize menu system
-void InitMenu(MenuSystem* menu) {
-    menu->current_menu = MAIN_MENU;
-    menu->selected_option = 0;
-    menu->transition_timer = 0.0f;
-    menu->show_instructions = false;
-    menu->instruction_timer = 0.0f;
-    
-    // Default options
-    menu->music_volume = 0.7f;
-    menu->sfx_volume = 0.8f;
-    menu->difficulty = 1; // Normal
-    menu->show_fps = false;
-}
+static void DrawMainMenu(const GameState* gameState);
+static void DrawOptionsMenu(const GameState* gameState);
+static void DrawCreditsMenu(const GameState* gameState);
+static void DrawInstructions(const GameState* gameState);
 
-// Update menu system
-void UpdateMenu(GameState* gameState, float delta) {
-    MenuSystem* menu = &gameState->menu;
-    
-    menu->transition_timer += delta;
-    
-    if (menu->show_instructions) {
-        menu->instruction_timer += delta;
-        
-        // Hide instructions after 10 seconds or if player presses any key
-        if (menu->instruction_timer > 10.0f || 
-            IsKeyPressed(KEY_SPACE) || 
-            IsKeyPressed(KEY_ENTER) || 
-            IsKeyPressed(KEY_ESCAPE)) {
-            menu->show_instructions = false;
-            menu->instruction_timer = 0.0f;
-        }
-        return;
-    }
-    
-    HandleMenuInput(gameState);
-}
+// =============================================================================
+// MENU INPUT HANDLING (defined first to avoid forward references)
+// =============================================================================
 
 // Handle menu input
 void HandleMenuInput(GameState* gameState) {
+    if (!gameState) return;
+    
     MenuSystem* menu = &gameState->menu;
     
     // Navigation
@@ -198,8 +169,60 @@ void HandleMenuInput(GameState* gameState) {
     }
 }
 
+// =============================================================================
+// MENU SYSTEM FUNCTIONS
+// =============================================================================
+
+// Initialize menu system
+void InitMenu(MenuSystem* menu) {
+    if (!menu) return;
+    
+    menu->current_menu = MAIN_MENU;
+    menu->selected_option = 0;
+    menu->transition_timer = 0.0f;
+    menu->show_instructions = false;
+    menu->instruction_timer = 0.0f;
+    
+    // Default options
+    menu->music_volume = 0.7f;
+    menu->sfx_volume = 0.8f;
+    menu->difficulty = 1; // Normal
+    menu->show_fps = false;
+}
+
+// Update menu system
+void UpdateMenu(GameState* gameState, float delta) {
+    if (!gameState) return;
+    
+    MenuSystem* menu = &gameState->menu;
+    
+    menu->transition_timer += delta;
+    
+    if (menu->show_instructions) {
+        menu->instruction_timer += delta;
+        
+        // Hide instructions after 10 seconds or if player presses any key
+        if (menu->instruction_timer > 10.0f || 
+            IsKeyPressed(KEY_SPACE) || 
+            IsKeyPressed(KEY_ENTER) || 
+            IsKeyPressed(KEY_ESCAPE)) {
+            menu->show_instructions = false;
+            menu->instruction_timer = 0.0f;
+        }
+        return;
+    }
+    
+    HandleMenuInput(gameState);
+}
+
+// =============================================================================
+// MENU DRAWING FUNCTIONS
+// =============================================================================
+
 // Draw menu system
 void DrawMenu(const GameState* gameState) {
+    if (!gameState) return;
+    
     const MenuSystem* menu = &gameState->menu;
     
     ClearBackground(BLACK);
@@ -248,7 +271,9 @@ void DrawMenu(const GameState* gameState) {
 }
 
 // Draw main menu
-void DrawMainMenu(const GameState* gameState) {
+static void DrawMainMenu(const GameState* gameState) {
+    if (!gameState) return;
+    
     const MenuSystem* menu = &gameState->menu;
     int start_y = 180;
     int spacing = 35;
@@ -279,7 +304,9 @@ void DrawMainMenu(const GameState* gameState) {
 }
 
 // Draw options menu
-void DrawOptionsMenu(const GameState* gameState) {
+static void DrawOptionsMenu(const GameState* gameState) {
+    if (!gameState) return;
+    
     const MenuSystem* menu = &gameState->menu;
     int start_y = 160;
     int spacing = 35;
@@ -337,7 +364,9 @@ void DrawOptionsMenu(const GameState* gameState) {
 }
 
 // Draw credits menu
-void DrawCreditsMenu(const GameState* gameState) {
+static void DrawCreditsMenu(const GameState* gameState) {
+    if (!gameState) return;
+    
     const MenuSystem* menu = &gameState->menu;
     int start_y = 140;
     int spacing = 25;
@@ -345,7 +374,7 @@ void DrawCreditsMenu(const GameState* gameState) {
     DrawText("GALACTIC SHMUP - Enhanced Edition", SCREEN_WIDTH/2 - 160, start_y, 24, WHITE);
     
     DrawText("Programming & Design:", SCREEN_WIDTH/2 - 100, start_y + 2 * spacing, 18, YELLOW);
-    DrawText("AI Assistant", SCREEN_WIDTH/2 - 50, start_y + 3 * spacing, 16, WHITE);
+    DrawText("Arsen Martirosyan", SCREEN_WIDTH/2 - 50, start_y + 3 * spacing, 16, WHITE);
     
     DrawText("Features:", SCREEN_WIDTH/2 - 40, start_y + 5 * spacing, 18, YELLOW);
     DrawText("- Advanced Enemy AI with 7 behavior types", SCREEN_WIDTH/2 - 140, start_y + 6 * spacing, 14, WHITE);
@@ -365,7 +394,9 @@ void DrawCreditsMenu(const GameState* gameState) {
 }
 
 // Draw instructions
-void DrawInstructions(const GameState* gameState) {
+static void DrawInstructions(const GameState* gameState) {
+    if (!gameState) return;
+    
     const MenuSystem* menu = &gameState->menu;
     int start_y = 60;
     int spacing = 20;
