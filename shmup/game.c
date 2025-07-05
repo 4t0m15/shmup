@@ -174,7 +174,7 @@ void InitializeCapturedShips(GameState* gameState) {
 
 void InitializeGameVariables(GameState* gameState) {
     if (!gameState) return;
-    i
+    
     // Initialize core game state
     gameState->wave_number = 0;
     gameState->wave_timer = 0.0f;

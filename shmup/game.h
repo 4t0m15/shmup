@@ -334,6 +334,56 @@ typedef struct {
     bool enable_enhanced_ai;
 } GameConfig;
 
+// Default game configuration
+extern const GameConfig DEFAULT_CONFIG;
+
+// =============================================================================
+// FUNCTION DECLARATIONS
+// =============================================================================
+
+// Core game functions - game.c
+void InitGame(GameState* gameState);
+void InitGameWithConfig(GameState* gameState, const GameConfig* config);
+bool ValidateGameState(const GameState* gameState);
+void ResetGameState(GameState* gameState);
+void UpdateGame(GameState* gameState, float delta);
+void DrawGame(const GameState* gameState);
+void HandleGameOver(GameState* gameState);
+void UpdateGameOver(GameState* gameState, float delta);
+void DrawGameOver(const GameState* gameState);
+
+// Menu functions - menu.c
+void InitMenu(MenuSystem* menu);
+void UpdateMenu(GameState* gameState, float delta);
+void DrawMenu(const GameState* gameState);
+void LoadHighScore(GameState* gameState);
+void SaveHighScore(GameState* gameState);
+
+// Player functions - player.c
+void UpdatePlayer(GameState* gameState, float delta);
+void DrawPlayer(const GameState* gameState);
+void DrawBullets(const GameState* gameState);
+
+// Enemy functions - enemy.c
+void UpdateEnemies(GameState* gameState, float delta);
+void DrawEnemies(const GameState* gameState);
+void SpawnEnemyWave(GameState* gameState);
+
+// Enemy AI functions - enemy_ai.c
+void UpdateEnemyAI(GameState* gameState, float delta);
+void UpdateEnemyBullets(GameState* gameState, float delta);
+
+// Collision functions - collision.c
+bool CheckPlayerEnemyCollisions(GameState* gameState);
+void CheckBulletEnemyCollisions(GameState* gameState);
+
+// Utility functions - utils.c
+void DrawBackground(const GameState* gameState);
+void DrawUI(const GameState* gameState);
+void UpdateScorePopups(GameState* gameState, float delta);
+void CheckForExtends(GameState* gameState);
+void UpdateBonusStage(GameState* gameState, float delta);
+
 // Utility functions
 Vector2 CalculateMovementPattern(Enemy* enemy, float delta);
 Vector2 GameVector2Lerp(Vector2 start, Vector2 end, float t);
