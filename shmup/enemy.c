@@ -22,7 +22,7 @@ void SpawnHostileShip(GameState* gameState, int spawn_wave) {
         if (!gameState->enemies[i].active) {
             Enemy* enemy = &gameState->enemies[i];
             
-            // Initialize hostile ship
+            // Initialize all basic fields
             enemy->active = true;
             enemy->type = HOSTILE_SHIP;
             enemy->state = ENTERING;
@@ -30,12 +30,47 @@ void SpawnHostileShip(GameState* gameState, int spawn_wave) {
             enemy->position = (Vector2){SCREEN_WIDTH / 2.0f, -50.0f};
             enemy->formation_pos = (Vector2){SCREEN_WIDTH / 2.0f, 100.0f};
             enemy->entry_start = enemy->position;
+            enemy->attack_start = (Vector2){0, 0};
             enemy->pattern = PATTERN_STRAIGHT;
             enemy->pattern_progress = 0.0f;
+            enemy->pattern_param = 0.0f;
             enemy->timer = 0.0f;
             enemy->shooting = true;
             enemy->shoot_timer = 1.0f;
             enemy->aggression_multiplier = 1.5f;
+            enemy->can_morph = false;
+            enemy->has_morphed = false;
+            
+            // Initialize tractor beam fields
+            enemy->tractor_active = false;
+            enemy->tractor_angle = 0.0f;
+            enemy->tractor_center = (Vector2){0, 0};
+            
+            // Initialize morphing fields
+            enemy->original_type = enemy->type;
+            enemy->target_type = enemy->type;
+            enemy->morph_timer = 0.0f;
+            
+            // Initialize captured ship fields
+            enemy->has_captured_ship = false;
+            enemy->captured_ship_hostile = false;
+            enemy->captured_ship_spawn_wave = 0;
+            
+            // Initialize combo fields
+            enemy->is_escort_in_combo = false;
+            enemy->escort_group_id = 0;
+            
+            // Initialize AI fields
+            enemy->ai_behavior = AI_AGGRESSIVE_ATTACK;
+            enemy->ai_timer = 0.0f;
+            enemy->ai_target = enemy->formation_pos;
+            enemy->predicted_player_pos = (Vector2){0, 0};
+            enemy->last_player_distance = 0.0f;
+            enemy->coordinating = false;
+            enemy->coordination_group = 0;
+            enemy->evasion_direction = 0.0f;
+            enemy->last_velocity = (Vector2){0, 0};
+            
             break;
         }
     }
@@ -179,7 +214,7 @@ void HandleShipRescue(GameState* gameState, Enemy* boss) {
 void SpawnEnemyWave(GameState* gameState) {
     if (!gameState) return;
     
-    // Check if all enemies are defeated
+    // Check if all enemies are defeated OR this is the initial wave (wave 0)
     bool all_defeated = true;
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (gameState->enemies[i].active) {
@@ -188,7 +223,8 @@ void SpawnEnemyWave(GameState* gameState) {
         }
     }
     
-    if (!all_defeated) return;
+    // Only spawn if all enemies are defeated OR this is the initial wave
+    if (!all_defeated && gameState->wave_number > 0) return;
     
     // Advance wave
     gameState->wave_number++;
@@ -196,13 +232,17 @@ void SpawnEnemyWave(GameState* gameState) {
     // Update aggression scaling
     UpdateAggressionScaling(gameState);
     
-    // Spawn bonus stage every 3rd wave
-    if (gameState->wave_number % 3 == 0) {
+    // New wave progression: 5 normal stages, 1 boss stage, 1 bonus stage (repeating)
+    // Calculate position in the 7-wave cycle (waves 1-5 normal, wave 6 boss, wave 7 bonus)
+    int cycle_position = ((gameState->wave_number - 1) % 7) + 1;
+    
+    // Spawn bonus stage on wave 7 of each cycle
+    if (cycle_position == 7) {
         SpawnBonusStage(gameState);
         return;
     }
     
-    // Spawn regular wave
+    // Spawn regular wave (with boss on wave 6 of each cycle)
     int enemies_to_spawn = 8 + (gameState->wave_number / 2);
     if (enemies_to_spawn > MAX_ENEMIES) enemies_to_spawn = MAX_ENEMIES;
     
@@ -210,6 +250,7 @@ void SpawnEnemyWave(GameState* gameState) {
     for (int i = 0; i < enemies_to_spawn; i++) {
         Enemy* enemy = &gameState->enemies[i];
         
+        // Initialize all basic fields
         enemy->active = true;
         enemy->type = (i < 2) ? ESCORT : NORMAL;
         enemy->state = ENTERING;
@@ -217,18 +258,50 @@ void SpawnEnemyWave(GameState* gameState) {
         enemy->position = (Vector2){50.0f + i * 80.0f, -50.0f};
         enemy->formation_pos = (Vector2){50.0f + i * 80.0f, 100.0f};
         enemy->entry_start = enemy->position;
+        enemy->attack_start = (Vector2){0, 0};
         enemy->pattern = PATTERN_STRAIGHT;
         enemy->pattern_progress = 0.0f;
+        enemy->pattern_param = 0.0f;
         enemy->timer = 0.0f;
         enemy->shooting = (enemy->type == ESCORT);
         enemy->shoot_timer = 1.0f + (rand() % 100) / 100.0f;
         enemy->aggression_multiplier = gameState->base_aggression;
         enemy->can_morph = (rand() % 100) < MORPH_CHANCE;
         enemy->has_morphed = false;
+        
+        // Initialize tractor beam fields
+        enemy->tractor_active = false;
+        enemy->tractor_angle = 0.0f;
+        enemy->tractor_center = (Vector2){0, 0};
+        
+        // Initialize morphing fields
+        enemy->original_type = enemy->type;
+        enemy->target_type = enemy->type;
+        enemy->morph_timer = 0.0f;
+        
+        // Initialize captured ship fields
+        enemy->has_captured_ship = false;
+        enemy->captured_ship_hostile = false;
+        enemy->captured_ship_spawn_wave = 0;
+        
+        // Initialize combo fields
+        enemy->is_escort_in_combo = false;
+        enemy->escort_group_id = 0;
+        
+        // Initialize AI fields
+        enemy->ai_behavior = AI_FORMATION_FLYING;
+        enemy->ai_timer = 0.0f;
+        enemy->ai_target = enemy->formation_pos;
+        enemy->predicted_player_pos = (Vector2){0, 0};
+        enemy->last_player_distance = 0.0f;
+        enemy->coordinating = false;
+        enemy->coordination_group = 0;
+        enemy->evasion_direction = 0.0f;
+        enemy->last_velocity = (Vector2){0, 0};
     }
     
-    // Spawn boss every 4th wave
-    if (gameState->wave_number % gameState->boss_wave_interval == 0 && enemies_to_spawn > 0) {
+    // Spawn boss on wave 6 of each cycle (waves 6, 13, 20, etc.)
+    if (cycle_position == 6 && enemies_to_spawn > 0) {
         Enemy* boss = &gameState->enemies[enemies_to_spawn - 1];
         boss->type = BOSS;
         boss->health = 5;
@@ -237,6 +310,8 @@ void SpawnEnemyWave(GameState* gameState) {
         boss->shooting = true;
         boss->tractor_active = true;
         boss->tractor_center = boss->position;
+        boss->ai_behavior = AI_AGGRESSIVE_ATTACK;
+        boss->ai_target = boss->formation_pos;
     }
 }
 

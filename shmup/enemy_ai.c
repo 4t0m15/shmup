@@ -319,8 +319,6 @@ void UpdateEnemyAI(GameState* gameState, float delta) {
     // Update aggression scaling
     UpdateAggressionScaling(gameState);
     
-    // Check for bonus stage spawn
-    if (gameState->wave_number % 3 == 0) {
-        SpawnBonusStage(gameState);
-    }
+    // Note: Bonus stage spawning is now handled in SpawnEnemyWave() in enemy.c
+    // using the new 7-wave cycle (5 normal, 1 boss, 1 bonus)
 }

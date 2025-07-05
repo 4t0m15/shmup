@@ -279,7 +279,7 @@ static void DrawMainMenu(const GameState* gameState) {
     int spacing = 35;
     
     const char* menu_options[] = {
-        "Start Game",
+        "Play",
         "Instructions",
         "Options",
         "Credits",
@@ -416,10 +416,10 @@ static void DrawInstructions(const GameState* gameState) {
     DrawText("Boss (Galaga) - Tractor beam, captures ships", 70, start_y + 12 * spacing, 16, WHITE);
     DrawText("Flagship - Morphed enemy, high value", 70, start_y + 13 * spacing, 16, WHITE);
     
-    DrawText("SPECIAL MECHANICS:", 50, start_y + 15 * spacing, 18, YELLOW);
-    DrawText("- Enemies use advanced AI behaviors", 70, start_y + 16 * spacing, 16, WHITE);
+    DrawText("WAVE PROGRESSION:", 50, start_y + 15 * spacing, 18, YELLOW);
+    DrawText("- 5 Normal stages, then 1 Boss, then 1 Bonus", 70, start_y + 16 * spacing, 16, WHITE);
     DrawText("- Rescue captured ships for dual fighter", 70, start_y + 17 * spacing, 16, WHITE);
-    DrawText("- Bonus stages every 3rd wave", 70, start_y + 18 * spacing, 16, WHITE);
+    DrawText("- Enemies use advanced AI behaviors", 70, start_y + 18 * spacing, 16, WHITE);
     DrawText("- Difficulty scales with wave number", 70, start_y + 19 * spacing, 16, WHITE);
     
     // Fade out instruction

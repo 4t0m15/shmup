@@ -23,7 +23,7 @@ static void DrawGamePlaying(const GameState* gameState);
 
 const GameConfig DEFAULT_CONFIG = {
     .starting_lives = STARTING_LIVES,
-    .boss_wave_interval = 4,
+    .boss_wave_interval = 6, // Updated to reflect new 7-wave cycle (boss on wave 6)
     .base_aggression = 1.0f,
     .morph_chance_percentage = MORPH_CHANCE,
     .player_start_position = {SCREEN_WIDTH / 2.0f - PLAYER_SIZE / 2.0f, SCREEN_HEIGHT - 80.0f},
@@ -178,7 +178,7 @@ void InitializeGameVariables(GameState* gameState) {
     // Initialize core game state
     gameState->wave_number = 0;
     gameState->wave_timer = 0.0f;
-    gameState->boss_wave_interval = 4;
+    gameState->boss_wave_interval = 6; // Updated to match the new 7-wave cycle system
     gameState->backgroundScrollY = 0.0f;
     gameState->shootCooldown = 0.0f;
     

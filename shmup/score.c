@@ -112,26 +112,56 @@ void SpawnBonusStage(GameState* gameState) {
     
     // Spawn bonus enemies in formation
     for (int i = 0; i < 8; i++) {
-        gameState->enemies[i].type = NORMAL;
-        gameState->enemies[i].health = 1;
-        gameState->enemies[i].formation_pos.x = 100.0f + i * 80.0f;
-        gameState->enemies[i].formation_pos.y = 100.0f;
-        gameState->enemies[i].position.x = gameState->enemies[i].formation_pos.x;
-        gameState->enemies[i].position.y = -50.0f;
-        gameState->enemies[i].entry_start = gameState->enemies[i].position;
-        gameState->enemies[i].state = ENTERING;
-        gameState->enemies[i].pattern = PATTERN_STRAIGHT;
-        gameState->enemies[i].pattern_progress = 0.0f;
-        gameState->enemies[i].pattern_param = 0.0f;
-        gameState->enemies[i].timer = 0.0f;
-        gameState->enemies[i].active = true;
-        gameState->enemies[i].shooting = false;
-        gameState->enemies[i].tractor_active = false;
-        gameState->enemies[i].is_escort_in_combo = false;
-        gameState->enemies[i].escort_group_id = 0;
-        gameState->enemies[i].can_morph = false;
-        gameState->enemies[i].has_morphed = false;
-        gameState->enemies[i].aggression_multiplier = 1.0f;
+        Enemy* enemy = &gameState->enemies[i];
+        
+        // Initialize all basic fields
+        enemy->active = true;
+        enemy->type = NORMAL;
+        enemy->state = ENTERING;
+        enemy->health = 1;
+        enemy->position = (Vector2){100.0f + i * 80.0f, -50.0f};
+        enemy->formation_pos = (Vector2){100.0f + i * 80.0f, 100.0f};
+        enemy->entry_start = enemy->position;
+        enemy->attack_start = (Vector2){0, 0};
+        enemy->pattern = PATTERN_STRAIGHT;
+        enemy->pattern_progress = 0.0f;
+        enemy->pattern_param = 0.0f;
+        enemy->timer = 0.0f;
+        enemy->shooting = false;
+        enemy->shoot_timer = 0.0f;
+        enemy->aggression_multiplier = 1.0f;
+        enemy->can_morph = false;
+        enemy->has_morphed = false;
+        
+        // Initialize tractor beam fields
+        enemy->tractor_active = false;
+        enemy->tractor_angle = 0.0f;
+        enemy->tractor_center = (Vector2){0, 0};
+        
+        // Initialize morphing fields
+        enemy->original_type = enemy->type;
+        enemy->target_type = enemy->type;
+        enemy->morph_timer = 0.0f;
+        
+        // Initialize captured ship fields
+        enemy->has_captured_ship = false;
+        enemy->captured_ship_hostile = false;
+        enemy->captured_ship_spawn_wave = 0;
+        
+        // Initialize combo fields
+        enemy->is_escort_in_combo = false;
+        enemy->escort_group_id = 0;
+        
+        // Initialize AI fields
+        enemy->ai_behavior = AI_FORMATION_FLYING;
+        enemy->ai_timer = 0.0f;
+        enemy->ai_target = enemy->formation_pos;
+        enemy->predicted_player_pos = (Vector2){0, 0};
+        enemy->last_player_distance = 0.0f;
+        enemy->coordinating = false;
+        enemy->coordination_group = 0;
+        enemy->evasion_direction = 0.0f;
+        enemy->last_velocity = (Vector2){0, 0};
     }
 }
 

@@ -368,6 +368,15 @@ void DrawBullets(const GameState* gameState);
 void UpdateEnemies(GameState* gameState, float delta);
 void DrawEnemies(const GameState* gameState);
 void SpawnEnemyWave(GameState* gameState);
+void HandleShipCapture(GameState* gameState, Enemy* boss);
+void HandleShipRescue(GameState* gameState, Enemy* boss);
+void SpawnHostileShip(GameState* gameState, int spawn_wave);
+void UpdateMorphing(GameState* gameState, float delta);
+void TriggerMorphing(Enemy* enemy);
+void UpdateCapturedShips(GameState* gameState, float delta);
+void UpdateAggressionScaling(GameState* gameState);
+void UpdateTractorBeam(GameState* gameState, Enemy* boss, float delta);
+void UpdateEnemyShooting(GameState* gameState, Enemy* enemy, float delta);
 
 // Enemy AI functions - enemy_ai.c
 void UpdateEnemyAI(GameState* gameState, float delta);
@@ -383,6 +392,12 @@ void DrawUI(const GameState* gameState);
 void UpdateScorePopups(GameState* gameState, float delta);
 void CheckForExtends(GameState* gameState);
 void UpdateBonusStage(GameState* gameState, float delta);
+
+// Score functions - score.c
+void AddScore(GameState* gameState, int points, Vector2 position);
+void SpawnBonusStage(GameState* gameState);
+void HandleEnemyDestroy(GameState* gameState, int enemy_index, Vector2 position);
+int CalculateEnemyScore(const Enemy* enemy);
 
 // Utility functions
 Vector2 CalculateMovementPattern(Enemy* enemy, float delta);
