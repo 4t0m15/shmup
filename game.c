@@ -272,7 +272,7 @@ bool ValidateGameState(const GameState* gameState) {
     }
     
     // Validate screen state
-    if (gameState->screen_state < MENU || gameState->screen_state > PAUSED) {
+    if (gameState->screen_state < MENU || gameState->screen_state > GAME_OVER) {
         return false;
     }
     
@@ -363,6 +363,7 @@ static void UpdateGamePlaying(GameState* gameState, float delta) {
     // Update game systems
     UpdatePlayer(gameState, delta);
     UpdateEnemyAI(gameState, delta);
+    UpdateEnemies(gameState, delta);
     UpdateEnemyBullets(gameState, delta);
     
     // Update player bullets
@@ -379,6 +380,18 @@ static void UpdateGamePlaying(GameState* gameState, float delta) {
     
     // Check collisions
     CheckBulletEnemyCollisions(gameState);
+    
+    // Handle player-enemy bullet collisions
+    if (CheckEnemyBulletPlayerCollisions(gameState)) {
+        gameState->player.lives--;
+        if (gameState->player.lives <= 0) {
+            HandleGameOver(gameState);
+        } else {
+            // Reset player position
+            gameState->player.rect.x = SCREEN_WIDTH / 2.0f - PLAYER_SIZE / 2.0f;
+            gameState->player.rect.y = SCREEN_HEIGHT - 80.0f;
+        }
+    }
     
     // Handle player-enemy collisions
     if (CheckPlayerEnemyCollisions(gameState)) {
@@ -430,12 +443,7 @@ void UpdateGame(GameState* gameState, float delta) {
             UpdateGameOver(gameState, delta);
             break;
             
-        case PAUSED:
-            if (IsKeyPressed(KEY_P) || IsKeyPressed(KEY_ESCAPE)) {
-                gameState->screen_state = PLAYING;
-                gameState->is_paused = false;
-            }
-            break;
+
     }
 }
 
@@ -493,10 +501,6 @@ void DrawGame(const GameState* gameState) {
             DrawGameOver(gameState);
             break;
             
-        case PAUSED:
-            DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, (Color){0, 0, 0, 128});
-            DrawText("PAUSED", SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 - 20, 40, WHITE);
-            DrawText("Press P or ESC to resume", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 + 30, 20, WHITE);
-            break;
+
     }
 }

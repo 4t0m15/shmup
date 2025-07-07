@@ -80,6 +80,7 @@ bool ShouldEnemyEvade(const GameState* gameState, const Enemy* enemy) {
 
 // Update swarm behavior
 void UpdateSwarmBehavior(GameState* gameState, Enemy* enemy, float delta) {
+    (void)delta; // Mark parameter as intentionally unused
     if (!gameState || !enemy) return;
     
     Vector2 swarm_center = {0, 0};
@@ -117,6 +118,7 @@ void UpdateSwarmBehavior(GameState* gameState, Enemy* enemy, float delta) {
 
 // Update coordinated attack
 void UpdateCoordinatedAttack(GameState* gameState, float delta) {
+    (void)delta; // Mark parameter as intentionally unused
     if (!gameState) return;
     
     // Count coordinating enemies
@@ -153,6 +155,7 @@ void SetEnemyAIBehavior(Enemy* enemy, AIBehavior behavior) {
 
 // Enhanced AI behavior update function
 void UpdateEnemyBehavior(GameState* gameState, Enemy* enemy, float delta) {
+    (void)delta; // Mark parameter as intentionally unused
     if (!gameState || !enemy) return;
     
     // Update AI target based on behavior
@@ -227,7 +230,7 @@ void UpdateEnemyAI(GameState* gameState, float delta) {
     // Update coordinated attacks
     UpdateCoordinatedAttack(gameState, delta);
     
-    // Update individual enemy AI
+    // Update individual enemy AI behaviors
     for (int i = 0; i < MAX_ENEMIES; i++) {
         Enemy* enemy = &gameState->enemies[i];
         
@@ -236,29 +239,11 @@ void UpdateEnemyAI(GameState* gameState, float delta) {
         // Update AI behavior
         UpdateEnemyBehavior(gameState, enemy, delta);
         
-        // Update enemy position based on AI behavior
-        enemy->position = CalculateMovementPattern(enemy, delta);
-        
-        // Update enemy shooting
-        UpdateEnemyShooting(gameState, enemy, delta);
-        
-        // Update tractor beam for boss
-        if (enemy->type == BOSS) {
-            UpdateTractorBeam(gameState, enemy, delta);
-        }
-        
         // Check for behavior changes
         enemy->ai_timer += delta;
         if (enemy->ai_timer > 3.0f) {
             SetEnemyAIBehavior(enemy, (AIBehavior)(rand() % 7));
             enemy->ai_timer = 0.0f;
-        }
-        
-        // Check for morphing trigger
-        if (enemy->can_morph && !enemy->has_morphed && enemy->timer > 5.0f) {
-            if (rand() % 100 < 2) { // 2% chance per frame after 5 seconds
-                TriggerMorphing(enemy);
-            }
         }
         
         // Update enhanced AI behaviors
@@ -286,7 +271,6 @@ void UpdateEnemyAI(GameState* gameState, float delta) {
                 // Evasive behavior
                 if (ShouldEnemyEvade(gameState, enemy)) {
                     enemy->evasion_direction = (rand() % 2 == 0) ? -1.0f : 1.0f;
-                    enemy->position.x += enemy->evasion_direction * 100.0f * delta;
                 }
                 break;
                 
@@ -300,25 +284,8 @@ void UpdateEnemyAI(GameState* gameState, float delta) {
                 enemy->aggression_multiplier = 0.7f;
                 break;
         }
-        
-        // Update timers
-        enemy->timer += delta;
-        
-        // Remove enemies that go off screen
-        if (enemy->position.y > SCREEN_HEIGHT + 50 || enemy->position.y < -100) {
-            enemy->active = false;
-        }
     }
-    
-    // Update morphing
-    UpdateMorphing(gameState, delta);
-    
-    // Update captured ships
-    UpdateCapturedShips(gameState, delta);
     
     // Update aggression scaling
     UpdateAggressionScaling(gameState);
-    
-    // Note: Bonus stage spawning is now handled in SpawnEnemyWave() in enemy.c
-    // using the new 7-wave cycle (5 normal, 1 boss, 1 bonus)
 }

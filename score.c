@@ -3,20 +3,40 @@
 
 // Load high score from file
 void LoadHighScore(GameState* gameState) {
+    if (!gameState) return;
+    
     FILE* file = fopen("highscore.txt", "r");
     if (file) {
-        fscanf(file, "%d", &gameState->high_score);
+        int result = fscanf(file, "%d", &gameState->high_score);
+        if (result != 1) {
+            // Failed to read, set default high score
+            gameState->high_score = 0;
+        }
         fclose(file);
+    } else {
+        // File doesn't exist or can't be opened, set default high score
+        gameState->high_score = 0;
     }
 }
 
 // Save high score to file
-void SaveHighScore(const GameState* gameState) {
+void SaveHighScore(GameState* gameState) {
+    if (!gameState) return;
+    
     FILE* file = fopen("highscore.txt", "w");
     if (file) {
-        fprintf(file, "%d", gameState->high_score);
-        fclose(file);
+        int result = fprintf(file, "%d", gameState->high_score);
+        if (result < 0) {
+            // Failed to write, but not much we can do here
+            // Could add logging in the future
+        }
+        if (fclose(file) != 0) {
+            // Failed to close file properly
+            // Could add logging in the future
+        }
     }
+    // If file couldn't be opened, silently fail
+    // Could add logging in the future
 }
 
 // Add score with visual popup

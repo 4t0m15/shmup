@@ -1,5 +1,6 @@
 #include "game.h"
 #include <stdio.h>
+#include <math.h>
 
 // Function to draw a bullet with realistic appearance
 void DrawBullet(Vector2 position, Color color, bool is_player_bullet) {
@@ -158,13 +159,17 @@ void DrawUI(const GameState* gameState) {
     DrawText(TextFormat("Lives: %d", gameState->player.lives), 10, 60, 20, WHITE);
     DrawText(TextFormat("Wave: %d", gameState->wave_number), 10, 85, 20, WHITE);
     
-    // Draw controls and seed information in the bottom right
+    // Draw controls and debug information in the bottom right
     int controls_x = SCREEN_WIDTH - 200;
     int controls_y = SCREEN_HEIGHT - 120;
     DrawText("Controls:", controls_x, controls_y, 18, LIGHTGRAY);
     DrawText("WASD/Arrows: Move", controls_x, controls_y + 20, 16, GRAY);
     DrawText("Space/Z: Shoot", controls_x, controls_y + 40, 16, GRAY);
-    DrawText(TextFormat("Seed: %u", gameState->random_seed), controls_x, controls_y + 70, 16, YELLOW);
+    
+    // Draw seed information only if FPS is enabled (debug mode)
+    if (gameState->menu.show_fps) {
+        DrawText(TextFormat("Seed: %u", gameState->random_seed), controls_x, controls_y + 70, 16, YELLOW);
+    }
     
     // Draw score popups
     for (int i = 0; i < 10; i++) {

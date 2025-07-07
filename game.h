@@ -97,8 +97,7 @@
 typedef enum {
     MENU,
     PLAYING,
-    GAME_OVER,
-    PAUSED
+    GAME_OVER
 } GameScreenState;
 
 typedef enum {
@@ -385,6 +384,7 @@ void UpdateEnemyBullets(GameState* gameState, float delta);
 // Collision functions - collision.c
 bool CheckPlayerEnemyCollisions(GameState* gameState);
 void CheckBulletEnemyCollisions(GameState* gameState);
+bool CheckEnemyBulletPlayerCollisions(GameState* gameState);
 
 // Utility functions - utils.c
 void DrawBackground(const GameState* gameState);
@@ -404,5 +404,6 @@ Vector2 CalculateMovementPattern(Enemy* enemy, float delta);
 Vector2 GameVector2Lerp(Vector2 start, Vector2 end, float t);
 Vector2 BezierQuad(Vector2 start, Vector2 control, Vector2 end, float t);
 void SeedRandomGenerator(GameState* gameState);
+float Vector2Distance(Vector2 v1, Vector2 v2);
 
 #endif // GAME_H

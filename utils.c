@@ -17,6 +17,13 @@ void SeedRandomGenerator(GameState* gameState) {
     srand(gameState->random_seed);
 }
 
+// Vector2Distance implementation (in case raylib doesn't provide it)
+float Vector2Distance(Vector2 v1, Vector2 v2) {
+    float dx = v2.x - v1.x;
+    float dy = v2.y - v1.y;
+    return sqrtf(dx * dx + dy * dy);
+}
+
 // Helper functions for movement patterns
 Vector2 GameVector2Lerp(Vector2 start, Vector2 end, float t) {
     Vector2 result;

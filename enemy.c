@@ -6,8 +6,7 @@
 // FORWARD DECLARATIONS
 // =============================================================================
 
-static void UpdateMorphingInternal(GameState* gameState, float delta);
-static void UpdateCapturedShipsInternal(GameState* gameState, float delta);
+
 
 // =============================================================================
 // ENEMY MANAGEMENT FUNCTIONS
@@ -15,6 +14,7 @@ static void UpdateCapturedShipsInternal(GameState* gameState, float delta);
 
 // Function to spawn hostile ship
 void SpawnHostileShip(GameState* gameState, int spawn_wave) {
+    (void)spawn_wave; // Mark parameter as intentionally unused
     if (!gameState) return;
     
     // Find an inactive enemy slot
@@ -132,6 +132,7 @@ void TriggerMorphing(Enemy* enemy) {
 // Function to update captured ships
 void UpdateCapturedShips(GameState* gameState, float delta) {
     if (!gameState) return;
+    (void)delta; // Mark parameter as intentionally unused
     
     for (int i = 0; i < MAX_CAPTURED_SHIPS; i++) {
         CapturedShip* ship = &gameState->captured_ships[i];

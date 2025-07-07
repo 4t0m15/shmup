@@ -71,7 +71,8 @@ void CheckBulletEnemyCollisions(GameState* gameState) {
 
 // Function to check player-enemy collisions
 bool CheckPlayerEnemyCollisions(GameState* gameState) {
-    Rectangle player_rect = gameState->player.rect;
+    Rectangle player_rect = gameState->player.has_captured_ship ? 
+        gameState->player.dual_hitbox : gameState->player.rect;
     
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (!gameState->enemies[i].active) continue;
@@ -85,6 +86,26 @@ bool CheckPlayerEnemyCollisions(GameState* gameState) {
         };
         
         if (CheckCollisionRecs(player_rect, enemy_rect)) {
+            return true; // Collision detected
+        }
+    }
+    
+    return false;
+}
+
+// Function to check enemy bullet-player collisions
+bool CheckEnemyBulletPlayerCollisions(GameState* gameState) {
+    if (!gameState) return false;
+    
+    Rectangle player_rect = gameState->player.has_captured_ship ? 
+        gameState->player.dual_hitbox : gameState->player.rect;
+    
+    for (int i = 0; i < MAX_ENEMY_BULLETS; i++) {
+        if (!gameState->enemy_bullets[i].active) continue;
+        
+        if (CheckCollisionBulletRec(gameState->enemy_bullets[i].position, player_rect, false)) {
+            // Hit! Deactivate bullet
+            gameState->enemy_bullets[i].active = false;
             return true; // Collision detected
         }
     }
