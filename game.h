@@ -8,6 +8,7 @@
 
 #include <raylib.h>
 #include <stdbool.h>
+#include <time.h>
 
 // =============================================================================
 // GAME CONSTANTS
@@ -68,6 +69,16 @@
 #define PI 3.14159265359f
 #endif
 #define TWO_PI 6.28318530718f
+
+// Particle system constants
+#define MAX_PARTICLES 500
+
+// Audio system constants
+#define MAX_SOUNDS 16
+#define MAX_MUSIC 8
+
+// Balance and power-up system constants
+#define MAX_POWERUPS 5
 
 // Scoring constants
 #define SCORE_BEE_FORMATION 50
@@ -151,13 +162,414 @@ typedef enum {
     AI_DEFENSIVE_FORMATION
 } AIBehavior;
 
+typedef enum {
+    PARTICLE_EXPLOSION,
+    PARTICLE_SPARK,
+    PARTICLE_TRAIL,
+    PARTICLE_SPARKLE,
+    PARTICLE_SMOKE
+} ParticleType;
+
+typedef enum {
+    SOUND_PLAYER_SHOOT,
+    SOUND_ENEMY_SHOOT,
+    SOUND_EXPLOSION_SMALL,
+    SOUND_EXPLOSION_LARGE,
+    SOUND_POWERUP,
+    SOUND_HIT,
+    SOUND_MENU_SELECT,
+    SOUND_MENU_MOVE,
+    SOUND_COUNT
+} SoundType;
+
+typedef enum {
+    MUSIC_MENU,
+    MUSIC_GAME,
+    MUSIC_BOSS,
+    MUSIC_COUNT
+} MusicType;
+
+typedef enum {
+    GAME_SOUND_PLAYER_SHOOT,
+    GAME_SOUND_ENEMY_SHOOT,
+    GAME_SOUND_ENEMY_HIT,
+    GAME_SOUND_PLAYER_HIT,
+    GAME_SOUND_ENEMY_DESTROY_SMALL,
+    GAME_SOUND_ENEMY_DESTROY_LARGE,
+    GAME_SOUND_POWERUP,
+    GAME_SOUND_MENU_MOVE,
+    GAME_SOUND_MENU_SELECT
+} GameSoundContext;
+
+typedef enum {
+    WEAPON_SINGLE,
+    WEAPON_DOUBLE,
+    WEAPON_TRIPLE,
+    WEAPON_SPREAD,
+    WEAPON_RAPID,
+    WEAPON_LASER,
+    WEAPON_HOMING,
+    WEAPON_PLASMA,
+    WEAPON_COUNT
+} WeaponType;
+
+typedef enum {
+    BULLET_NORMAL,
+    BULLET_LASER,
+    BULLET_HOMING,
+    BULLET_PLASMA
+} BulletType;
+
+typedef enum {
+    POWERUP_RAPID_FIRE,
+    POWERUP_SHIELD,
+    POWERUP_SPREAD_SHOT,
+    POWERUP_SLOW_MOTION,
+    POWERUP_EXTRA_LIFE,
+    POWERUP_SCORE_MULTIPLIER,
+    POWERUP_COUNT
+} PowerUpType;
+
+typedef enum {
+    SHADER_DISTORTION,
+    SHADER_CHROMATIC,
+    SHADER_BLOOM,
+    SHADER_BLUR,
+    SHADER_ENERGY_FIELD,
+    SHADER_COUNT
+} ShaderType;
+
+typedef enum {
+    ACHIEVEMENT_FIRST_KILL,
+    ACHIEVEMENT_KILL_100,
+    ACHIEVEMENT_KILL_1000,
+    ACHIEVEMENT_KILL_5000,
+    ACHIEVEMENT_WAVE_10,
+    ACHIEVEMENT_WAVE_25,
+    ACHIEVEMENT_WAVE_50,
+    ACHIEVEMENT_WAVE_100,
+    ACHIEVEMENT_SCORE_10K,
+    ACHIEVEMENT_SCORE_50K,
+    ACHIEVEMENT_SCORE_100K,
+    ACHIEVEMENT_SCORE_500K,
+    ACHIEVEMENT_ACCURACY_75,
+    ACHIEVEMENT_ACCURACY_90,
+    ACHIEVEMENT_ACCURACY_95,
+    ACHIEVEMENT_PERFECT_ACCURACY,
+    ACHIEVEMENT_NO_DEATH_WAVE_5,
+    ACHIEVEMENT_NO_DEATH_WAVE_10,
+    ACHIEVEMENT_NO_DEATH_WAVE_20,
+    ACHIEVEMENT_PACIFIST,
+    ACHIEVEMENT_COMBO_10,
+    ACHIEVEMENT_COMBO_25,
+    ACHIEVEMENT_COMBO_50,
+    ACHIEVEMENT_COMBO_100,
+    ACHIEVEMENT_BOSS_NO_DAMAGE,
+    ACHIEVEMENT_DUAL_FIGHTER,
+    ACHIEVEMENT_ALL_WEAPONS,
+    ACHIEVEMENT_PERFECT_BONUS,
+    ACHIEVEMENT_SPEED_RUN,
+    ACHIEVEMENT_HOARDER,
+    ACHIEVEMENT_MORPHING_MASTER,
+    ACHIEVEMENT_AI_OBSERVER,
+    ACHIEVEMENT_PLAY_TIME_1H,
+    ACHIEVEMENT_PLAY_TIME_10H,
+    ACHIEVEMENT_PLAY_TIME_50H,
+    ACHIEVEMENT_COUNT
+} AchievementID;
+
+typedef enum {
+    ACHIEVEMENT_BRONZE,
+    ACHIEVEMENT_SILVER,
+    ACHIEVEMENT_GOLD,
+    ACHIEVEMENT_PLATINUM,
+    ACHIEVEMENT_SPECIAL
+} AchievementTier;
+
+typedef enum {
+    STAT_ENEMY_KILLED,
+    STAT_WAVE_REACHED,
+    STAT_SCORE_ADDED,
+    STAT_SHOT_FIRED,
+    STAT_SHOT_HIT,
+    STAT_COMBO_ACHIEVED,
+    STAT_BOSS_DEFEATED,
+    STAT_POWER_UP_COLLECTED,
+    STAT_SHIP_RESCUED,
+    STAT_MORPHING_WITNESSED,
+    STAT_PERFECT_BONUS,
+    STAT_DEATH_OCCURRED,
+    STAT_WAVE_COMPLETED,
+    STAT_WEAPON_UNLOCKED,
+    STAT_PACIFIST_WAVE,
+    STAT_AI_BEHAVIOR_SEEN,
+    STAT_GAME_STARTED,
+    STAT_SPEED_RUN_COMPLETE
+} StatType;
+
+typedef enum {
+    REWARD_WEAPON_UNLOCK,
+    REWARD_LIFE_BONUS,
+    REWARD_SCORE_MULTIPLIER,
+    REWARD_SPECIAL_ABILITY
+} SpecialRewardType;
+
+typedef struct {
+    int damage;
+    float fire_rate;
+    float bullet_speed;
+    int bullet_count;
+    float spread_angle;
+    bool penetration;
+    bool homing;
+    float explosion_radius;
+    bool unlocked;
+} WeaponStats;
+
+typedef struct {
+    WeaponType current_weapon;
+    int weapon_level;
+    int max_level;
+    WeaponStats weapon_stats[WEAPON_COUNT];
+    int upgrade_points;
+    float weapon_select_timer;
+    bool show_weapon_ui;
+} WeaponSystem;
+
+typedef struct {
+    AchievementID id;
+    const char* name;
+    const char* description;
+    AchievementTier tier;
+    bool unlocked;
+    time_t unlock_time;
+    int target_value;
+} Achievement;
+
+typedef struct {
+    Achievement achievements[ACHIEVEMENT_COUNT];
+    int total_achievements;
+    int unlocked_count;
+    float notification_timer;
+    AchievementID current_notification;
+    bool show_notification;
+    
+    struct {
+        int total_enemies_killed;
+        int total_score;
+        int highest_wave;
+        float total_play_time;
+        int total_shots_fired;
+        int total_shots_hit;
+        int highest_combo;
+        int bosses_defeated;
+        int power_ups_collected;
+        int ships_rescued;
+        int morphings_witnessed;
+        int perfect_bonus_stages;
+        int no_death_waves;
+        int current_no_death_streak;
+        int ai_behaviors_seen;
+        int weapons_unlocked;
+        int pacifist_waves;
+        float speed_run_time;
+        int games_played;
+    } stats;
+} AchievementSystem;
+
+typedef struct {
+    const char* name;
+    const char* description;
+    AchievementTier tier;
+    bool unlocked;
+    time_t unlock_time;
+    int target_value;
+} AchievementDef;
+
+typedef struct {
+    int total_enemies_killed;
+    int total_score;
+    int highest_wave;
+    float total_play_time;
+    int total_shots_fired;
+    int total_shots_hit;
+    int highest_combo;
+    int bosses_defeated;
+    int power_ups_collected;
+    int ships_rescued;
+    int morphings_witnessed;
+    int perfect_bonus_stages;
+    int no_death_waves;
+    int current_no_death_streak;
+    int ai_behaviors_seen;
+    int weapons_unlocked;
+    int pacifist_waves;
+    float speed_run_time;
+    int games_played;
+} AchievementStats;
+
+typedef struct {
+    Shader shaders[SHADER_COUNT];
+    bool shader_loaded[SHADER_COUNT];
+    
+    // Shader parameters
+    bool post_process_enabled;
+    bool bloom_enabled;
+    bool chromatic_aberration_enabled;
+    bool distortion_enabled;
+    bool energy_field_enabled;
+    
+    float bloom_threshold;
+    float bloom_intensity;
+    float chromatic_intensity;
+    float distortion_intensity;
+    float blur_strength;
+    float shader_time;
+    
+    // Shader uniform locations
+    int time_loc[SHADER_COUNT];
+    int intensity_loc[SHADER_COUNT];
+    int threshold_loc[SHADER_COUNT];
+    int direction_loc[SHADER_COUNT];
+    int strength_loc[SHADER_COUNT];
+    int screen_size_loc[SHADER_COUNT];
+    
+    // Render textures
+    RenderTexture2D screen_texture;
+    RenderTexture2D bloom_texture;
+    RenderTexture2D temp_texture;
+} ShaderSystem;
+
+// =============================================================================
+// PARTICLE AND EFFECTS STRUCTURES
+// =============================================================================
+
+typedef struct {
+    Vector2 position;
+    Vector2 velocity;
+    Color color;
+    float size;
+    float life;
+    float max_life;
+    bool active;
+    ParticleType type;
+} Particle;
+
+typedef struct {
+    Particle particles[MAX_PARTICLES];
+    
+    // Screen effects
+    float screen_shake_intensity;
+    float screen_shake_duration;
+    Vector2 screen_offset;
+    
+    // Flash effects
+    float flash_intensity;
+    float flash_duration;
+    Color flash_color;
+} ParticleSystem;
+
+typedef struct {
+    Sound sound;
+    bool loaded;
+    float volume;
+    float pitch;
+} GameSound;
+
+typedef struct {
+    Music music;
+    bool loaded;
+    float volume;
+} GameMusic;
+
+typedef struct {
+    GameSound sounds[MAX_SOUNDS];
+    GameMusic music[MAX_MUSIC];
+    
+    float master_volume;
+    float sfx_volume;
+    float music_volume;
+    
+    int current_music;
+    float fade_timer;
+    float fade_duration;
+    float fade_target_volume;
+} AudioSystem;
+
+typedef struct {
+    Vector2 position;
+    Vector2 velocity;
+    PowerUpType type;
+    float timer;
+    float pulse_timer;
+    bool active;
+} PowerUp;
+
+typedef struct {
+    PowerUp powerups[MAX_POWERUPS];
+    float spawn_timer;
+    
+    // Active power-up timers
+    float rapid_fire_timer;
+    float shield_timer;
+    float spread_shot_timer;
+    float slow_motion_timer;
+} PowerUpSystem;
+
+typedef struct {
+    float difficulty_multiplier;
+    float enemy_speed_multiplier;
+    float enemy_health_multiplier;
+    float player_damage_multiplier;
+    float score_multiplier;
+    float spawn_rate_multiplier;
+    
+    // Adaptive difficulty
+    bool adaptive_difficulty;
+    float player_skill_rating;
+    float recent_performance;
+    int deaths_this_session;
+    float time_alive;
+    int enemies_killed;
+    int accuracy_shots_fired;
+    int accuracy_shots_hit;
+    
+    // Combo system
+    int power_level;
+    float combo_multiplier;
+    float combo_timer;
+    int consecutive_hits;
+    int max_combo;
+} BalanceSystem;
+
+typedef struct {
+    bool auto_pause_on_focus_loss;
+    bool show_hit_indicators;
+    bool show_damage_numbers;
+    bool screen_edge_warning;
+    bool bullet_time_on_near_miss;
+    bool auto_collect_powerups;
+    
+    float near_miss_timer;
+    bool focus_lost;
+    float edge_warning_timer;
+} QoLSystem;
+
 // =============================================================================
 // CORE STRUCTURES
 // =============================================================================
 
 typedef struct {
     Vector2 position;
+    Vector2 velocity;
+    int damage;
+    float lifetime;
     bool active;
+    bool penetrating;
+    bool homing;
+    float explosion_radius;
+    BulletType bullet_type;
+    int target_index;
 } Bullet;
 
 typedef struct {
@@ -303,6 +715,14 @@ typedef struct {
     
     // Systems
     MenuSystem menu;
+    ParticleSystem effects;
+    AudioSystem audio;
+    PowerUpSystem powerups;
+    BalanceSystem balance;
+    QoLSystem qol;
+    WeaponSystem weapons;
+    AchievementSystem achievements;
+    ShaderSystem shaders;
     Vector2 player_positions[AI_PREDICTION_FRAMES];
     int player_position_index;
     bool is_paused;
@@ -405,5 +825,125 @@ Vector2 GameVector2Lerp(Vector2 start, Vector2 end, float t);
 Vector2 BezierQuad(Vector2 start, Vector2 control, Vector2 end, float t);
 void SeedRandomGenerator(GameState* gameState);
 float Vector2Distance(Vector2 v1, Vector2 v2);
+
+// Effects functions - effects.c
+void InitParticleSystem(ParticleSystem* system);
+void SpawnParticle(ParticleSystem* system, Vector2 position, Vector2 velocity, 
+                   Color color, float size, float life, ParticleType type);
+void CreateExplosion(ParticleSystem* system, Vector2 position, Color color, int particle_count);
+void CreateBulletTrail(ParticleSystem* system, Vector2 position, Vector2 velocity, Color color);
+void CreatePowerUpEffect(ParticleSystem* system, Vector2 position);
+void CreateHitEffect(ParticleSystem* system, Vector2 position, bool is_enemy_hit);
+void UpdateParticleSystem(ParticleSystem* system, float delta);
+void TriggerScreenShake(ParticleSystem* system, float intensity, float duration);
+void TriggerScreenFlash(ParticleSystem* system, Color color, float duration);
+void DrawParticleSystem(const ParticleSystem* system);
+void DrawEnhancedBullet(Vector2 position, Color color, bool is_player_bullet, float trail_alpha);
+void DrawEnhancedEnemy(const Enemy* enemy, float pulse_factor);
+
+// Audio functions - audio.c
+void InitAudioSystem(AudioSystem* audio);
+void CleanupAudioSystem(AudioSystem* audio);
+bool LoadSoundEffect(AudioSystem* audio, SoundType type);
+bool LoadMusicTrack(AudioSystem* audio, MusicType type);
+void PlaySoundEffect(AudioSystem* audio, SoundType type, float volume, float pitch);
+void PlayMusicTrack(AudioSystem* audio, MusicType type);
+void StopMusic(AudioSystem* audio);
+void FadeMusic(AudioSystem* audio, float target_volume, float duration);
+void UpdateAudioSystem(AudioSystem* audio, float delta);
+void SetGameMasterVolume(AudioSystem* audio, float volume);
+void SetGameSFXVolume(AudioSystem* audio, float volume);
+void SetGameMusicVolume(AudioSystem* audio, float volume);
+void InitAllAudioAssets(AudioSystem* audio);
+void PlayGameSound(AudioSystem* audio, GameSoundContext context, float intensity);
+float Clamp(float value, float min, float max);
+
+// Balance and power-up functions - balance.c
+void InitBalanceSystem(BalanceSystem* balance);
+void UpdateAdaptiveDifficulty(BalanceSystem* balance, GameState* gameState, float delta);
+void UpdateComboSystem(BalanceSystem* balance, float delta);
+void RegisterPlayerShot(BalanceSystem* balance);
+void RegisterHit(BalanceSystem* balance, bool was_enemy_killed);
+void RegisterPlayerDeath(BalanceSystem* balance);
+int CalculateScoreWithMultipliers(BalanceSystem* balance, int base_score);
+int GetAdjustedEnemyHealth(BalanceSystem* balance, EnemyType type);
+float GetAdjustedEnemySpeed(BalanceSystem* balance, float base_speed);
+
+void InitPowerUpSystem(PowerUpSystem* powerups);
+void SpawnPowerUp(PowerUpSystem* powerups, Vector2 position, PowerUpType type);
+void UpdatePowerUpSystem(PowerUpSystem* powerups, GameState* gameState, float delta);
+void CollectPowerUp(PowerUpSystem* powerups, GameState* gameState, PowerUpType type);
+bool IsPowerUpActive(PowerUpSystem* powerups, PowerUpType type);
+float GetPowerUpTimeRemaining(PowerUpSystem* powerups, PowerUpType type);
+void DrawPowerUps(const PowerUpSystem* powerups);
+
+void InitQoLSystem(QoLSystem* qol);
+void UpdateQoLSystem(QoLSystem* qol, GameState* gameState, float delta);
+void CheckForNearMisses(QoLSystem* qol, GameState* gameState);
+void DrawQoLUI(const QoLSystem* qol, const GameState* gameState);
+
+// Weapon system functions - weapons.c
+void InitWeaponSystem(WeaponSystem* weapons);
+void InitWeaponStats(WeaponSystem* weapons);
+void UpdateWeaponSystem(WeaponSystem* weapons, GameState* gameState, float delta);
+void SwitchWeapon(WeaponSystem* weapons, int direction);
+void FireWeapon(WeaponSystem* weapons, GameState* gameState, Vector2 position);
+void FireSingleShot(GameState* gameState, Vector2 position, WeaponStats* stats);
+void FireDoubleShot(GameState* gameState, Vector2 position, WeaponStats* stats);
+void FireTripleShot(GameState* gameState, Vector2 position, WeaponStats* stats);
+void FireSpreadShot(GameState* gameState, Vector2 position, WeaponStats* stats);
+void FireLaser(GameState* gameState, Vector2 position, WeaponStats* stats);
+void FireHomingMissile(GameState* gameState, Vector2 position, WeaponStats* stats);
+void FirePlasma(GameState* gameState, Vector2 position, WeaponStats* stats);
+void UpgradeCurrentWeapon(WeaponSystem* weapons);
+void UnlockWeapon(WeaponSystem* weapons, WeaponType weapon);
+float GetWeaponFireRate(WeaponSystem* weapons);
+bool IsWeaponUnlocked(WeaponSystem* weapons, WeaponType weapon);
+const char* GetWeaponName(WeaponType weapon);
+const char* GetWeaponDescription(WeaponType weapon);
+void UpdateAdvancedBullets(GameState* gameState, float delta);
+void UpdateHomingBehavior(GameState* gameState, Bullet* bullet, float delta);
+void DrawWeaponUI(const WeaponSystem* weapons, const GameState* gameState);
+void DrawAdvancedBullets(const GameState* gameState);
+
+// Achievement system functions - achievements.c
+void InitAchievementSystem(AchievementSystem* achievements);
+void UpdateAchievementSystem(AchievementSystem* achievements, GameState* gameState, float delta);
+void CheckAchievements(AchievementSystem* achievements, GameState* gameState);
+void UnlockAchievement(AchievementSystem* achievements, AchievementID id);
+void ShowAchievementNotification(AchievementSystem* achievements, AchievementID id);
+int GetAchievementPoints(AchievementTier tier);
+float GetAchievementProgress(const AchievementSystem* achievements, AchievementID id);
+void UpdateAchievementStats(AchievementSystem* achievements, StatType stat, int value);
+void DrawAchievementNotification(const AchievementSystem* achievements);
+void DrawAchievementMenu(const AchievementSystem* achievements, int selected_index);
+Color GetTierColor(AchievementTier tier);
+const char* GetTierName(AchievementTier tier);
+void SaveAchievements(const AchievementSystem* achievements);
+void LoadAchievements(AchievementSystem* achievements);
+void ResetAchievements(AchievementSystem* achievements);
+int GetTotalAchievementScore(const AchievementSystem* achievements);
+bool IsEligibleForSpecialReward(const AchievementSystem* achievements, SpecialRewardType reward);
+
+// Shader system functions - shaders.c
+void InitShaderSystem(ShaderSystem* shaders);
+void LoadAllShaders(ShaderSystem* shaders);
+void CreateShaderTextures(ShaderSystem* shaders);
+void UpdateShaderSystem(ShaderSystem* shaders, float delta_time);
+void BeginGameShaderMode(ShaderSystem* shaders);
+void EndGameShaderMode(ShaderSystem* shaders);
+void ApplyPostProcessing(ShaderSystem* shaders);
+Texture2D ApplyBloomEffect(ShaderSystem* shaders, Texture2D input_texture);
+Texture2D ApplyChromaticAberration(ShaderSystem* shaders, Texture2D input_texture);
+Texture2D ApplyDistortion(ShaderSystem* shaders, Texture2D input_texture);
+Texture2D ApplyEnergyField(ShaderSystem* shaders, Texture2D input_texture);
+void SetShaderEffect(ShaderSystem* shaders, ShaderType type, bool enabled);
+void SetShaderParameter(ShaderSystem* shaders, ShaderType type, const char* param_name, float value);
+void TriggerShaderHitEffect(ShaderSystem* shaders);
+void TriggerShaderExplosionEffect(ShaderSystem* shaders);
+void TriggerShaderPowerUpEffect(ShaderSystem* shaders);
+void ResetShaderEffects(ShaderSystem* shaders, float delta_time);
+void CleanupShaderSystem(ShaderSystem* shaders);
+void DrawShaderDebugUI(const ShaderSystem* shaders);
 
 #endif // GAME_H

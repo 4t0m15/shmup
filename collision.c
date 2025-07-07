@@ -59,8 +59,23 @@ void CheckBulletEnemyCollisions(GameState* gameState) {
                 // Reduce enemy health
                 gameState->enemies[j].health--;
                 
+                // Create hit effect
+                CreateHitEffect(&gameState->effects, gameState->enemies[j].position, true);
+                PlayGameSound(&gameState->audio, GAME_SOUND_ENEMY_HIT, 1.0f);
+                
                 // Destroy enemy if health reaches 0
                 if (gameState->enemies[j].health <= 0) {
+                    // Create explosion effect
+                    Color explosion_color = GREEN;
+                    if (gameState->enemies[j].type == BOSS) explosion_color = PURPLE;
+                    else if (gameState->enemies[j].type == ESCORT) explosion_color = ORANGE;
+                    else if (gameState->enemies[j].type == FLAGSHIP) explosion_color = GOLD;
+                    
+                    CreateExplosion(&gameState->effects, gameState->enemies[j].position, explosion_color, 20);
+                    
+                    // Register enemy killed for balance system
+                    RegisterHit(&gameState->balance, true);
+                    
                     HandleEnemyDestroy(gameState, j, gameState->enemies[j].position);
                 }
                 break;
@@ -71,6 +86,11 @@ void CheckBulletEnemyCollisions(GameState* gameState) {
 
 // Function to check player-enemy collisions
 bool CheckPlayerEnemyCollisions(GameState* gameState) {
+    // Shield power-up provides temporary invincibility
+    if (IsPowerUpActive(&gameState->powerups, POWERUP_SHIELD)) {
+        return false;
+    }
+    
     Rectangle player_rect = gameState->player.has_captured_ship ? 
         gameState->player.dual_hitbox : gameState->player.rect;
     
@@ -86,6 +106,8 @@ bool CheckPlayerEnemyCollisions(GameState* gameState) {
         };
         
         if (CheckCollisionRecs(player_rect, enemy_rect)) {
+            // Register player death for balance system
+            RegisterPlayerDeath(&gameState->balance);
             return true; // Collision detected
         }
     }
@@ -97,6 +119,11 @@ bool CheckPlayerEnemyCollisions(GameState* gameState) {
 bool CheckEnemyBulletPlayerCollisions(GameState* gameState) {
     if (!gameState) return false;
     
+    // Shield power-up provides temporary invincibility
+    if (IsPowerUpActive(&gameState->powerups, POWERUP_SHIELD)) {
+        return false;
+    }
+    
     Rectangle player_rect = gameState->player.has_captured_ship ? 
         gameState->player.dual_hitbox : gameState->player.rect;
     
@@ -106,6 +133,11 @@ bool CheckEnemyBulletPlayerCollisions(GameState* gameState) {
         if (CheckCollisionBulletRec(gameState->enemy_bullets[i].position, player_rect, false)) {
             // Hit! Deactivate bullet
             gameState->enemy_bullets[i].active = false;
+            PlayGameSound(&gameState->audio, GAME_SOUND_PLAYER_HIT, 1.0f);
+            
+            // Register player death for balance system
+            RegisterPlayerDeath(&gameState->balance);
+            
             return true; // Collision detected
         }
     }

@@ -55,49 +55,50 @@ void HandlePlayerInput(GameState* gameState, float delta) {
 // Handle player shooting
 void HandlePlayerShooting(GameState* gameState) {
     if ((IsKeyDown(KEY_SPACE) || IsKeyDown(KEY_Z)) && gameState->shootCooldown <= 0.0f) {
-        // Find an inactive bullet
-        for (int i = 0; i < MAX_BULLETS; i++) {
-            if (!gameState->bullets[i].active) {
-                gameState->bullets[i].active = true;
-                gameState->bullets[i].position.x = gameState->player.rect.x + gameState->player.rect.width / 2.0f;
-                gameState->bullets[i].position.y = gameState->player.rect.y;
-                gameState->shootCooldown = 0.2f; // Shooting cooldown
-                break;
-            }
-        }
-        
-        // Dual fire for captured ship
-        if (gameState->player.dual_fire) {
-            for (int i = 0; i < MAX_BULLETS; i++) {
-                if (!gameState->bullets[i].active) {
-                    gameState->bullets[i].active = true;
-                    gameState->bullets[i].position.x = gameState->player.captured_ship_offset.x + PLAYER_SIZE / 2.0f;
-                    gameState->bullets[i].position.y = gameState->player.captured_ship_offset.y;
-                    break;
-                }
-            }
-        }
+        // Register shot for balance system
+        RegisterPlayerShot(&gameState->balance);
+
+        // Use weapon system for firing
+        Vector2 shoot_pos = {
+            gameState->player.rect.x + gameState->player.rect.width / 2.0f,
+            gameState->player.rect.y
+        };
+        FireWeapon(&gameState->weapons, gameState, shoot_pos);
+
+        // Use weapon system fire rate
+        float fire_rate = GetWeaponFireRate(&gameState->weapons);
+        gameState->shootCooldown = fire_rate;
     }
 }
 
 // Update player
 void UpdatePlayer(GameState* gameState, float delta) {
+    // Apply slow motion power-up to player movement
+    float time_scale = IsPowerUpActive(&gameState->powerups, POWERUP_SLOW_MOTION) ? 0.5f : 1.0f;
+    float adjusted_delta = delta * time_scale;
+    
     // Update dual fighter mechanics
-    UpdateDualFighter(gameState, delta);
+    UpdateDualFighter(gameState, adjusted_delta);
     
     // Handle input
-    HandlePlayerInput(gameState, delta);
+    HandlePlayerInput(gameState, adjusted_delta);
     
     // Handle shooting
     HandlePlayerShooting(gameState);
     
     // Update shooting cooldown
     if (gameState->shootCooldown > 0.0f) {
-        gameState->shootCooldown -= delta;
+        gameState->shootCooldown -= adjusted_delta;
     }
     
     // Reset player color after hit
     if (gameState->player.color.r > 0 && gameState->player.color.g < 255) {
         gameState->player.color = BLUE;
+    }
+    
+    // Apply shield visual effect
+    if (IsPowerUpActive(&gameState->powerups, POWERUP_SHIELD)) {
+        // Shield effect will be drawn in render.c
+        gameState->player.color = (Color){100, 150, 255, 255};
     }
 }

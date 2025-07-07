@@ -24,6 +24,7 @@ void HandleMenuInput(GameState* gameState) {
     
     // Navigation
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
+        PlayGameSound(&gameState->audio, GAME_SOUND_MENU_MOVE, 1.0f);
         menu->selected_option--;
         if (menu->selected_option < 0) {
             switch (menu->current_menu) {
@@ -41,6 +42,7 @@ void HandleMenuInput(GameState* gameState) {
     }
     
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
+        PlayGameSound(&gameState->audio, GAME_SOUND_MENU_MOVE, 1.0f);
         menu->selected_option++;
         switch (menu->current_menu) {
             case MAIN_MENU:
@@ -57,6 +59,7 @@ void HandleMenuInput(GameState* gameState) {
     
     // Selection
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) {
+        PlayGameSound(&gameState->audio, GAME_SOUND_MENU_SELECT, 1.0f);
         switch (menu->current_menu) {
             case MAIN_MENU:
                 switch (menu->selected_option) {
@@ -95,10 +98,12 @@ void HandleMenuInput(GameState* gameState) {
                         break;
                     case 3: // Show FPS
                         menu->show_fps = !menu->show_fps;
+                        PlayGameSound(&gameState->audio, GAME_SOUND_MENU_SELECT, 0.8f);
                         break;
                     case 4: // Reset High Score
                         gameState->high_score = 0;
                         SaveHighScore(gameState);
+                        PlayGameSound(&gameState->audio, GAME_SOUND_MENU_SELECT, 0.8f);
                         break;
                     case 5: // Back
                         menu->current_menu = MAIN_MENU;
@@ -135,14 +140,17 @@ void HandleMenuInput(GameState* gameState) {
     // Options menu special handling
     if (menu->current_menu == OPTIONS_MENU) {
         if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
+            PlayGameSound(&gameState->audio, GAME_SOUND_MENU_MOVE, 0.7f);
             switch (menu->selected_option) {
                 case 0: // Music Volume
                     menu->music_volume -= 0.1f;
                     if (menu->music_volume < 0.0f) menu->music_volume = 0.0f;
+                    SetGameMusicVolume(&gameState->audio, menu->music_volume);
                     break;
                 case 1: // SFX Volume
                     menu->sfx_volume -= 0.1f;
                     if (menu->sfx_volume < 0.0f) menu->sfx_volume = 0.0f;
+                    SetGameSFXVolume(&gameState->audio, menu->sfx_volume);
                     break;
                 case 2: // Difficulty
                     menu->difficulty--;
@@ -152,14 +160,17 @@ void HandleMenuInput(GameState* gameState) {
         }
         
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
+            PlayGameSound(&gameState->audio, GAME_SOUND_MENU_MOVE, 0.7f);
             switch (menu->selected_option) {
                 case 0: // Music Volume
                     menu->music_volume += 0.1f;
                     if (menu->music_volume > 1.0f) menu->music_volume = 1.0f;
+                    SetGameMusicVolume(&gameState->audio, menu->music_volume);
                     break;
                 case 1: // SFX Volume
                     menu->sfx_volume += 0.1f;
                     if (menu->sfx_volume > 1.0f) menu->sfx_volume = 1.0f;
+                    SetGameSFXVolume(&gameState->audio, menu->sfx_volume);
                     break;
                 case 2: // Difficulty
                     menu->difficulty++;

@@ -4,51 +4,53 @@
 // Load high score from file
 void LoadHighScore(GameState* gameState) {
     if (!gameState) return;
-    
+    gameState->high_score = 0;
+
     FILE* file = fopen("highscore.txt", "r");
-    if (file) {
-        int result = fscanf(file, "%d", &gameState->high_score);
-        if (result != 1) {
-            // Failed to read, set default high score
-            gameState->high_score = 0;
-        }
-        fclose(file);
-    } else {
-        // File doesn't exist or can't be opened, set default high score
+    if (!file) {
+        // File doesn't exist or can't be opened; not fatal.
+        return;
+    }
+    int result = fscanf(file, "%d", &gameState->high_score);
+    if (result != 1) {
         gameState->high_score = 0;
+        // Optionally log: fprintf(stderr, "Warning: Failed to read high score.\n");
+    }
+    if (fclose(file) != 0) {
+        // Optionally log: fprintf(stderr, "Warning: Failed to close high score file.\n");
     }
 }
 
 // Save high score to file
 void SaveHighScore(GameState* gameState) {
     if (!gameState) return;
-    
+
     FILE* file = fopen("highscore.txt", "w");
-    if (file) {
-        int result = fprintf(file, "%d", gameState->high_score);
-        if (result < 0) {
-            // Failed to write, but not much we can do here
-            // Could add logging in the future
-        }
-        if (fclose(file) != 0) {
-            // Failed to close file properly
-            // Could add logging in the future
-        }
+    if (!file) {
+        // Optionally log: fprintf(stderr, "Error: Could not open highscore.txt for writing.\n");
+        return;
     }
-    // If file couldn't be opened, silently fail
-    // Could add logging in the future
+    int result = fprintf(file, "%d", gameState->high_score);
+    if (result < 0) {
+        // Optionally log: fprintf(stderr, "Error: Failed to write high score.\n");
+    }
+    if (fclose(file) != 0) {
+        // Optionally log: fprintf(stderr, "Warning: Failed to close high score file after writing.\n");
+    }
 }
 
-// Add score with visual popup
+// Add score with visual popup and multipliers
 void AddScore(GameState* gameState, int points, Vector2 position) {
-    gameState->score += points;
+    // Apply balance system multipliers
+    int final_score = CalculateScoreWithMultipliers(&gameState->balance, points);
+    gameState->score += final_score;
     
     // Find an inactive score popup
     for (int i = 0; i < 10; i++) {
         if (!gameState->score_popups[i].active) {
             gameState->score_popups[i].active = true;
             gameState->score_popups[i].position = position;
-            gameState->score_popups[i].score = points;
+            gameState->score_popups[i].score = final_score;
             gameState->score_popups[i].timer = 2.0f;
             break;
         }
@@ -96,6 +98,15 @@ void HandleEnemyDestroy(GameState* gameState, int enemy_index, Vector2 position)
     
     // Calculate score
     int score = CalculateEnemyScore(enemy);
+    
+    // Play destruction sound based on enemy type
+    if (enemy->type == BOSS) {
+        PlayGameSound(&gameState->audio, GAME_SOUND_ENEMY_DESTROY_LARGE, 1.0f);
+    } else if (enemy->type == FLAGSHIP || enemy->type == ESCORT) {
+        PlayGameSound(&gameState->audio, GAME_SOUND_ENEMY_DESTROY_LARGE, 0.8f);
+    } else {
+        PlayGameSound(&gameState->audio, GAME_SOUND_ENEMY_DESTROY_SMALL, 1.0f);
+    }
     
     // Handle ship rescue if boss has captured ship
     if (enemy->type == BOSS && enemy->has_captured_ship) {

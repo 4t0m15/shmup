@@ -34,7 +34,7 @@ CFLAGS="-Wall -Wextra -std=c99 -O2"
 TARGET="galactic_shmup"
 
 # Source files (all .c files in current directory)
-SOURCES="shmup.c game.c player.c enemy.c enemy_ai.c collision.c score.c menu.c render.c utils.c"
+SOURCES="shmup.c game.c player.c enemy.c enemy_ai.c collision.c score.c menu.c render.c utils.c effects.c audio.c balance.c weapons.c achievements.c shaders.c"
 
 # Check if all source files exist
 for src in $SOURCES; do

@@ -175,6 +175,9 @@ void HandleShipCapture(GameState* gameState, Enemy* boss) {
     boss->captured_ship_hostile = true;
     boss->captured_ship_spawn_wave = gameState->wave_number + HOSTILE_SHIP_DELAY;
     
+    // Play capture sound effect
+    PlayGameSound(&gameState->audio, GAME_SOUND_POWERUP, 0.8f);
+    
     // Add captured ship to tracking
     for (int i = 0; i < MAX_CAPTURED_SHIPS; i++) {
         if (!gameState->captured_ships[i].active) {
@@ -200,6 +203,9 @@ void HandleShipRescue(GameState* gameState, Enemy* boss) {
     // Mark boss as no longer having captured ship
     boss->has_captured_ship = false;
     boss->captured_ship_hostile = false;
+    
+    // Play rescue/powerup sound
+    PlayGameSound(&gameState->audio, GAME_SOUND_POWERUP, 1.0f);
     
     // Remove from captured ships tracking
     for (int i = 0; i < MAX_CAPTURED_SHIPS; i++) {
@@ -232,6 +238,15 @@ void SpawnEnemyWave(GameState* gameState) {
     
     // Update aggression scaling
     UpdateAggressionScaling(gameState);
+    
+    // Play wave start sound or music change
+    if (gameState->wave_number % 6 == 0) {
+        // Boss wave - change to boss music
+        PlayMusicTrack(&gameState->audio, MUSIC_BOSS);
+    } else if (gameState->wave_number == 1) {
+        // First wave - start game music
+        PlayMusicTrack(&gameState->audio, MUSIC_GAME);
+    }
     
     // New wave progression: 5 normal stages, 1 boss stage, 1 bonus stage (repeating)
     // Calculate position in the 7-wave cycle (waves 1-5 normal, wave 6 boss, wave 7 bonus)
@@ -374,6 +389,9 @@ void UpdateEnemyShooting(GameState* gameState, Enemy* enemy, float delta) {
                     direction.x * ENEMY_BULLET_SPEED,
                     direction.y * ENEMY_BULLET_SPEED
                 };
+                
+                // Play enemy shooting sound
+                PlayGameSound(&gameState->audio, GAME_SOUND_ENEMY_SHOOT, 1.0f);
                 
                 break;
             }

@@ -24,8 +24,8 @@ else
 endif
 
 # Source files
-SOURCES = $(wildcard $(SRCDIR)/*.c)
-OBJECTS = $(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+SOURCES = shmup.c game.c player.c enemy.c enemy_ai.c collision.c score.c menu.c render.c utils.c effects.c audio.c balance.c weapons.c achievements.c shaders.c
+OBJECTS = $(SOURCES:%.c=$(OBJDIR)/%.o)
 
 # Default target
 all: $(TARGET)
@@ -35,7 +35,7 @@ $(OBJDIR):
 	@mkdir -p $(OBJDIR)
 
 # Compile object files
-$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
+$(OBJDIR)/%.o: %.c | $(OBJDIR)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Link executable
