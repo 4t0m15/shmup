@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use rand::prelude::*;
 use bevy::window::{WindowPlugin, Window};
-use bevy::core_pipeline::Camera2dBundle;
 // Removed obsolete core_pipeline import
 
 // —————————————————————————————————————————————————————————————————————
@@ -38,7 +37,7 @@ struct EnemySpawnTimer(Timer);
 // —————————————————————————————————————————————————————————————————————
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.2)))
+        .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.2)))
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
@@ -69,12 +68,15 @@ fn setup(mut commands: Commands) {
 
     // Player
     commands.spawn((
-        Sprite {
-            color: Color::srgb(0.3, 0.7, 1.0),
-            custom_size: Some(PLAYER_SIZE),
+        SpriteBundle {
+            sprite: Sprite {
+                color: Color::rgb(0.3, 0.7, 1.0),
+                custom_size: Some(PLAYER_SIZE),
+                ..default()
+            },
+            transform: Transform::from_xyz(0.0, -WINDOW_HEIGHT / 2.0 + 60.0, 0.0),
             ..default()
         },
-        Transform::from_xyz(0.0, -WINDOW_HEIGHT / 2.0 + 60.0, 0.0),
         Player,
     ));
 
@@ -93,22 +95,22 @@ fn player_movement(
     mut query: Query<&mut Transform, With<Player>>,
     time: Res<Time>,
 ) {
-    if let Ok(mut transform) = query.single_mut() {
+    if let Ok(mut transform) = query.get_single_mut() {
         let mut dir = Vec3::ZERO;
-        if keyboard.pressed(KeyCode::ArrowLeft) || keyboard.pressed(KeyCode::KeyA) {
+        if keyboard.pressed(KeyCode::Left) || keyboard.pressed(KeyCode::A) {
             dir.x -= 1.0;
         }
-        if keyboard.pressed(KeyCode::ArrowRight) || keyboard.pressed(KeyCode::KeyD) {
+        if keyboard.pressed(KeyCode::Right) || keyboard.pressed(KeyCode::D) {
             dir.x += 1.0;
         }
-        if keyboard.pressed(KeyCode::ArrowUp) || keyboard.pressed(KeyCode::KeyW) {
+        if keyboard.pressed(KeyCode::Up) || keyboard.pressed(KeyCode::W) {
             dir.y += 1.0;
         }
-        if keyboard.pressed(KeyCode::ArrowDown) || keyboard.pressed(KeyCode::KeyS) {
+        if keyboard.pressed(KeyCode::Down) || keyboard.pressed(KeyCode::S) {
             dir.y -= 1.0;
         }
 
-        let dt = time.delta().as_secs_f32();
+        let dt = time.delta_seconds();
         let movement = dir.normalize_or_zero() * PLAYER_SPEED * dt;
         let new_pos = transform.translation + movement;
 
@@ -129,16 +131,19 @@ fn player_shooting(
     query: Query<&Transform, With<Player>>,
 ) {
     if keyboard.just_pressed(KeyCode::Space) {
-        if let Ok(player_tf) = query.single() {
+        if let Ok(player_tf) = query.get_single() {
             commands.spawn((
-                Sprite {
-                    color: Color::srgba_u8(255, 255, 0, 255),
-                    custom_size: Some(BULLET_SIZE),
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::rgba_u8(255, 255, 0, 255),
+                        custom_size: Some(BULLET_SIZE),
+                        ..default()
+                    },
+                    transform: Transform::from_translation(
+                        player_tf.translation + Vec3::Y * PLAYER_SIZE.y / 2.0,
+                    ),
                     ..default()
                 },
-                Transform::from_translation(
-                    player_tf.translation + Vec3::Y * PLAYER_SIZE.y / 2.0,
-                ),
                 Bullet,
             ));
         }
@@ -150,7 +155,7 @@ fn bullet_movement(
     mut query: Query<(Entity, &mut Transform), With<Bullet>>,
     time: Res<Time>,
 ) {
-    let dt = time.delta().as_secs_f32();
+    let dt = time.delta_seconds();
     for (ent, mut tf) in query.iter_mut() {
         tf.translation.y += BULLET_SPEED * dt;
         if tf.translation.y > WINDOW_HEIGHT / 2.0 + BULLET_SIZE.y {
@@ -171,12 +176,15 @@ fn enemy_spawner(
                 WINDOW_WIDTH / 2.0 - ENEMY_SIZE.x / 2.0,
         );
         commands.spawn((
-            Sprite {
-                color: Color::srgba_u8(255, 0, 0, 255),
-                custom_size: Some(ENEMY_SIZE),
+            SpriteBundle {
+                sprite: Sprite {
+                    color: Color::rgba_u8(255, 0, 0, 255),
+                    custom_size: Some(ENEMY_SIZE),
+                    ..default()
+                },
+                transform: Transform::from_xyz(x, WINDOW_HEIGHT / 2.0 + ENEMY_SIZE.y, 0.0),
                 ..default()
             },
-            Transform::from_xyz(x, WINDOW_HEIGHT / 2.0 + ENEMY_SIZE.y, 0.0),
             Enemy,
         ));
     }
