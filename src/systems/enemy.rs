@@ -1,4 +1,7 @@
 use bevy::prelude::*;
+use bevy::sprite::SpriteBundle;
+use bevy::input::ButtonInput;
+use crate::components::enemy::Enemy;
 
 const ENEMY_SPEED: f32 = 80.0;
 
@@ -19,7 +22,7 @@ pub fn enemy_movement(
     mut query: Query<(Entity, &mut Transform), With<Enemy>>,
 ) {
     for (entity, mut transform) in &mut query {
-        transform.translation.y -= ENEMY_SPEED * time.delta_seconds();
+        transform.translation.y -= ENEMY_SPEED * time.delta_secs();
         if transform.translation.y < -400.0 {
             commands.entity(entity).despawn();
         }

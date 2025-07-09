@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::sprite::SpriteBundle;
 
 mod components;
 mod systems;
@@ -52,7 +53,7 @@ fn main() {
 }
 
 fn setup_camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(bevy::core_pipeline::camera::Camera2dBundle::default());
 }
 
 fn spawn_player(mut commands: Commands) {
@@ -78,7 +79,7 @@ fn scroll_background(time: Res<Time>, mut query: Query<(&Player, &mut Transform)
 }
 
 fn player_movement(
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     mut query: Query<(&Player, &mut Velocity)>,
 ) {
     for (_, mut velocity) in query.iter_mut() {

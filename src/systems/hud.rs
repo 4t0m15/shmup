@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::*;
 use crate::resources::game_state::GameStats;
 
 #[derive(Component)]

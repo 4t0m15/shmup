@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use bevy::sprite::SpriteBundle;
+use bevy::input::ButtonInput;
 
 use crate::components::boss::{Boss, BossHealth};
 use crate::resources::game_state::GameStats;

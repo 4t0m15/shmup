@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use bevy::sprite::SpriteBundle;
+use bevy::input::ButtonInput;
 use crate::components::background::Background;
 
 const BG_SCROLL_SPEED: f32 = 60.0;
@@ -6,14 +8,13 @@ const BG_SCROLL_SPEED: f32 = 60.0;
 pub fn spawn_background(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Placeholder: use a solid color or a simple texture if available
     let texture_handle = asset_server.load("sprites/background.png");
-    commands.spawn((
-        SpriteBundle {
+    commands.spawn(SpriteBundle {
             texture: texture_handle,
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..default()
         },
         Background,
-    ));
+    );
 }
 
 pub fn scroll_background(

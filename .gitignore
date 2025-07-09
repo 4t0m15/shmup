@@ -1,0 +1,35 @@
+# Rust build and dependency files
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# VS Code settings
+.vscode/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# By default, ignore all build artifacts and temp files
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+*.obj
+*.o
+*.a
+*.lib
+*.tmp
+*.swp
+*.swo
+*.bak
+*.old
+
+# Ignore incremental build and debug folders
+**/incremental/
+**/debug/
+**/release/

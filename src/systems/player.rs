@@ -1,7 +1,8 @@
 use bevy::prelude::*;
+use bevy::sprite::SpriteBundle;
+use bevy::input::ButtonInput;
 use crate::components::player::{Player, Velocity};
 use crate::systems::bullet::spawn_bullet;
-use crate::components::bullet::Bullet;
 
 const PLAYER_SPEED: f32 = 200.0;
 const PLAYER_SHOOT_COOLDOWN: f32 = 0.15;
@@ -23,22 +24,22 @@ pub fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 pub fn player_movement(
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     mut query: Query<(&mut Transform, &mut Velocity), With<Player>>,
 ) {
     for (mut transform, mut velocity) in &mut query {
         let mut direction = Vec2::ZERO;
-        if keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::A) {
+        if keyboard_input.pressed(KeyCode::ArrowLeft) {
             direction.x -= 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowRight) || keyboard_input.pressed(KeyCode::D) {
+        if keyboard_input.pressed(KeyCode::ArrowRight) {
             direction.x += 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::W) {
+        if keyboard_input.pressed(KeyCode::ArrowUp) {
             direction.y += 1.0;
         }
-        if keyboard_input.pressed(KeyCode::ArrowDown) || keyboard_input.pressed(KeyCode::S) {
+        if keyboard_input.pressed(KeyCode::ArrowDown) {
             direction.y -= 1.0;
         }
         if direction.length_squared() > 0.0 {
@@ -56,15 +57,15 @@ pub fn player_movement(
 
 pub fn player_shooting(
     mut commands: Commands,
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     mut timer: ResMut<PlayerShootTimer>,
     asset_server: Res<AssetServer>,
     query: Query<&Transform, With<Player>>,
 ) {
     timer.0.tick(time.delta());
-    if (keyboard_input.pressed(KeyCode::Space) || keyboard_input.pressed(KeyCode::Z)) && timer.0.finished() {
-        if let Ok(transform) = query.get_single() {
+    if keyboard_input.pressed(KeyCode::Space) && timer.0.finished() {
+        if let Ok(transform) = query.single() {
             let bullet_texture = asset_server.load("sprites/bullet.png");
             let pos = transform.translation + Vec3::new(0.0, 24.0, 0.0);
             spawn_bullet(&mut commands, pos, bullet_texture);
@@ -73,26 +74,6 @@ pub fn player_shooting(
     }
 }
 
-use bevy::prelude::*;
-use systems::background::*;
-use systems::player::*;
-
-fn main() {
-    App::new()
-        .insert_resource(ClearColor(Color::srgb(0.2, 0.4, 0.8)))
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "1942 Shooter".to_string(),
-                resolution: (480., 640.).into(),
-                ..default()
-            }),
-            ..default()
-        }))
-        .add_systems(Startup, (setup_camera, spawn_background, spawn_player))
-        .add_systems(Update, (scroll_background, player_movement, player_shooting))
-        .run();
-}
-
-fn setup_camera(mut commands: Commands) {
+pub fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }

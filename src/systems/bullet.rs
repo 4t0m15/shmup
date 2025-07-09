@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use bevy::sprite::SpriteBundle;
+use bevy::input::ButtonInput;
 use crate::components::bullet::Bullet;
 
 const BULLET_SPEED: f32 = 400.0;
