@@ -33,6 +33,15 @@ const COMBO_TIMEOUT: f32 = 2.0; // Time before combo resets
 const COMBO_MULTIPLIER_BASE: f32 = 1.5; // Base multiplier increase per combo
 const COMBO_MULTIPLIER_CAP: f32 = 5.0; // Maximum combo multiplier
 
+// Laser weapon constants
+const LASER_CHARGE_TIME: f32 = 2.0; // Time to fully charge laser
+const LASER_DAMAGE_BASE: f32 = 50.0; // Base damage per tick
+const LASER_DAMAGE_MAX: f32 = 200.0; // Maximum damage at full charge
+const LASER_WIDTH_BASE: f32 = 8.0; // Base laser width
+const LASER_WIDTH_MAX: f32 = 20.0; // Maximum laser width at full charge
+const LASER_COLOR_BASE: Color = Color::new(0.0, 1.0, 0.0, 1.0); // Green
+const LASER_COLOR_CHARGED: Color = Color::new(1.0, 0.0, 0.0, 1.0); // Red when fully charged
+
 #[derive(Clone, Copy, PartialEq)]
 enum EnemyType {
     Normal,
@@ -52,6 +61,7 @@ enum PowerUpType {
     RapidFire,
     TripleShot,
     Shield,
+    Laser,
 }
 
 #[derive(Clone)]
@@ -405,6 +415,7 @@ impl PowerUp {
             PowerUpType::RapidFire => Color::new(0.2, 1.0, 0.2, pulse),
             PowerUpType::TripleShot => Color::new(1.0, 0.5, 0.0, pulse),
             PowerUpType::Shield => Color::new(0.2, 0.5, 1.0, pulse),
+            PowerUpType::Laser => Color::new(0.8, 0.8, 0.2, pulse), // Laser color
         }
     }
 }
@@ -424,7 +435,7 @@ struct GameState {
     invincible_timer: f32,
     high_score: u32,
     power_ups: Vec<PowerUp>,
-    power_up_timers: [f32; 3], // [rapid_fire, triple_shot, shield]
+    power_up_timers: [f32; 4], // [rapid_fire, triple_shot, shield, laser]
     power_up_spawn_timer: f32,
     screen_shake: f32,
     background_particles: Vec<Particle>,
@@ -439,6 +450,8 @@ struct GameState {
     fire_rate: f32, // Shots per second
     boss_spawn_score: u32, // Track when to spawn next boss
     boss_warning_timer: f32, // Timer for boss warning text
+    laser: Laser,
+    laser_instruction_timer: f32, // Timer for laser instruction popup
 }
 
 impl GameState {
@@ -516,7 +529,7 @@ impl GameState {
             invincible_timer: 0.0,
             high_score: Self::load_high_score(),
             power_ups: Vec::new(),
-            power_up_timers: [0.0; 3],
+            power_up_timers: [0.0; 4],
             power_up_spawn_timer: 0.0,
             screen_shake: 0.0,
             background_particles,
@@ -531,6 +544,8 @@ impl GameState {
             fire_rate: 10.0, // Default fire rate
             boss_spawn_score: 0, // Initialize boss spawn score
             boss_warning_timer: 0.0, // Initialize boss warning timer
+            laser: Laser::new(),
+            laser_instruction_timer: 0.0, // Initialize laser instruction timer
         }
     }
 
@@ -574,10 +589,11 @@ impl GameState {
     fn spawn_power_up(&mut self) {
         let mut rng = rand::thread_rng();
         let x = rng.gen_range(50.0..(SCREEN_WIDTH - 50.0));
-        let power_type = match rng.gen_range(0..3) {
+        let power_type = match rng.gen_range(0..4) { // Changed to 4 for Laser
             0 => PowerUpType::RapidFire,
             1 => PowerUpType::TripleShot,
-            _ => PowerUpType::Shield,
+            2 => PowerUpType::Shield,
+            _ => PowerUpType::Laser, // Laser power-up
         };
         let power_up = PowerUp::new(Vec2::new(x, -20.0), power_type);
         self.power_ups.push(power_up);
@@ -681,6 +697,10 @@ impl GameState {
                     PowerUpType::RapidFire => self.power_up_timers[0] = POWERUP_DURATION,
                     PowerUpType::TripleShot => self.power_up_timers[1] = POWERUP_DURATION,
                     PowerUpType::Shield => self.power_up_timers[2] = POWERUP_DURATION,
+                    PowerUpType::Laser => {
+                        self.power_up_timers[3] = POWERUP_DURATION;
+                        self.laser_instruction_timer = 5.0; // Show instruction for 5 seconds
+                    }
                 }
             }
         }
@@ -700,8 +720,6 @@ impl GameState {
                     self.lives -= 1;
                     self.player.position = Vec2::new(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT - 50.0);
                     self.player.velocity = Vec2::ZERO;
-                    self.enemies.clear();
-                    self.bullets.clear();
                     self.invincible_timer = 1.0; // 1 second invincibility
                     self.screen_shake = 0.2; // Strong screen shake
                     
@@ -843,6 +861,69 @@ impl GameState {
         
         // Clean up boss bullets
         self.boss_bullets.retain(|bullet| bullet.active);
+        
+        // Check laser collisions
+        if self.laser.is_firing {
+            let laser_bounds = self.laser.get_laser_bounds();
+            
+            // Check laser-enemy collisions
+            let mut enemies_to_destroy = Vec::new();
+            for (enemy_idx, enemy) in self.enemies.iter_mut().enumerate() {
+                if enemy.active && laser_bounds.overlaps(&enemy.get_bounds()) {
+                    enemies_to_destroy.push(enemy_idx);
+                    
+                    // Update combo system
+                    self.combo_counter += 1;
+                    self.combo_timer = COMBO_TIMEOUT;
+                    self.combo_multiplier = (COMBO_MULTIPLIER_BASE * self.combo_counter as f32).min(COMBO_MULTIPLIER_CAP);
+                    if self.combo_counter > self.max_combo {
+                        self.max_combo = self.combo_counter;
+                    }
+                    
+                    let base_score = match enemy.enemy_type {
+                        Some(EnemyType::Big) => BIG_ENEMY_SCORE,
+                        _ => 10,
+                    };
+                    let combo_score = (base_score as f32 * self.combo_multiplier) as u32;
+                    self.score += combo_score;
+                    self.explosions.push(Explosion::new(enemy.position));
+                    self.screen_shake = 0.1;
+                }
+            }
+            
+            // Apply enemy destruction
+            for &enemy_idx in enemies_to_destroy.iter().rev() {
+                self.enemies[enemy_idx].active = false;
+            }
+            
+            // Check laser-boss collisions
+            if let Some(boss) = &mut self.boss {
+                if boss.active && laser_bounds.overlaps(&GameObject::new(boss.position, Vec2::ZERO, boss.size).get_bounds()) {
+                    boss.take_damage(self.laser.damage * 0.1); // Laser does continuous damage
+                    
+                    // Update combo system for boss hits
+                    self.combo_counter += 1;
+                    self.combo_timer = COMBO_TIMEOUT;
+                    self.combo_multiplier = (COMBO_MULTIPLIER_BASE * self.combo_counter as f32).min(COMBO_MULTIPLIER_CAP);
+                    if self.combo_counter > self.max_combo {
+                        self.max_combo = self.combo_counter;
+                    }
+                    
+                    // Boss damage gives more points
+                    let boss_score = match boss.boss_type {
+                        BossType::Destroyer => 50,
+                        BossType::Carrier => 75,
+                        BossType::Behemoth => 100,
+                    };
+                    let combo_score = (boss_score as f32 * self.combo_multiplier) as u32;
+                    self.score += combo_score;
+                    
+                    // Create explosion effect
+                    self.explosions.push(Explosion::new(boss.position));
+                    self.screen_shake = 0.15;
+                }
+            }
+        }
     }
 }
 
@@ -896,6 +977,14 @@ impl EventHandler for GameState {
             self.boss_warning_timer -= dt;
             if self.boss_warning_timer < 0.0 {
                 self.boss_warning_timer = 0.0;
+            }
+        }
+
+        // Update laser instruction timer
+        if self.laser_instruction_timer > 0.0 {
+            self.laser_instruction_timer -= dt;
+            if self.laser_instruction_timer < 0.0 {
+                self.laser_instruction_timer = 0.0;
             }
         }
 
@@ -953,6 +1042,17 @@ impl EventHandler for GameState {
             }
         }
 
+        // Handle laser charging and firing
+        if self.power_up_timers[3] > 0.0 && !self.game_over { // Laser powerup active
+            if self.keys_pressed.contains(&KeyCode::L) && !self.laser.is_charging && !self.laser.is_firing {
+                // Start charging laser
+                self.laser.start_charging(self.player.position);
+            } else if !self.keys_pressed.contains(&KeyCode::L) && self.laser.is_charging {
+                // Fire laser when L key is released
+                self.laser.fire();
+            }
+        }
+
         // Update fire cooldown
         if self.fire_cooldown > 0.0 {
             self.fire_cooldown -= dt;
@@ -1005,6 +1105,15 @@ impl EventHandler for GameState {
             combo_text.update(dt);
         }
         self.combo_texts.retain(|ct| !ct.is_dead());
+
+        // Update laser
+        if self.power_up_timers[3] > 0.0 { // Laser powerup active
+            self.laser.update_charging(dt);
+            self.laser.update_firing(dt);
+        } else {
+            // Reset laser when powerup expires
+            self.laser = Laser::new();
+        }
 
         // Spawn enemies
         self.enemy_spawn_timer += dt;
@@ -1539,6 +1648,16 @@ impl EventHandler for GameState {
                         .dest(Vec2::new(10.0, indicator_y) + shake_offset)
                         .color(Color::new(0.2, 0.5, 1.0, 1.0)),
                 );
+                indicator_y += 20.0;
+            }
+            if self.power_up_timers[3] > 0.0 {
+                let laser_text = Text::new(format!("Laser: {:.1}s", self.power_up_timers[3]));
+                canvas.draw(
+                    &laser_text,
+                    DrawParam::default()
+                        .dest(Vec2::new(10.0, indicator_y) + shake_offset)
+                        .color(Color::new(0.8, 0.8, 0.2, 1.0)),
+                );
             }
 
             // Draw boss warning
@@ -1556,6 +1675,169 @@ impl EventHandler for GameState {
                         .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 80.0, 80.0) + shake_offset)
                         .color(warning_color),
                 );
+            }
+
+            // Draw laser instruction popup
+            if self.laser_instruction_timer > 0.0 {
+                let laser_title = Text::new("LASER WEAPON ACQUIRED!");
+                let laser_instruction1 = Text::new("Hold L key to charge the laser");
+                let laser_instruction2 = Text::new("Release L key to fire!");
+                let laser_tip = Text::new("Longer charge = more damage!");
+                
+                let pulse = (std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f32() * 3.0)
+                    .sin() * 0.3 + 0.7;
+                let laser_color = Color::new(0.8, 0.8, 0.2, pulse);
+                
+                // Title
+                canvas.draw(
+                    &laser_title,
+                    DrawParam::default()
+                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 150.0, 80.0) + shake_offset)
+                        .color(laser_color),
+                );
+                
+                // Instructions
+                canvas.draw(
+                    &laser_instruction1,
+                    DrawParam::default()
+                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 120.0, 110.0) + shake_offset)
+                        .color(Color::WHITE),
+                );
+                
+                canvas.draw(
+                    &laser_instruction2,
+                    DrawParam::default()
+                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 100.0, 130.0) + shake_offset)
+                        .color(Color::WHITE),
+                );
+                
+                canvas.draw(
+                    &laser_tip,
+                    DrawParam::default()
+                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 120.0, 150.0) + shake_offset)
+                        .color(Color::new(1.0, 0.8, 0.0, 1.0)),
+                );
+            }
+
+
+
+            // Draw laser charging particles
+            if self.laser.is_charging {
+                for particle in &self.laser.charge_particles {
+                    if !particle.is_dead() {
+                        let color = Color::new(
+                            particle.color.r,
+                            particle.color.g,
+                            particle.color.b,
+                            particle.get_alpha(),
+                        );
+                        let mesh = Mesh::new_circle(
+                            ctx,
+                            DrawMode::fill(),
+                            particle.position + shake_offset,
+                            particle.size,
+                            0.1,
+                            color,
+                        )?;
+                        canvas.draw(&mesh, DrawParam::default());
+                    }
+                }
+                
+                // Draw charge indicator
+                let charge_progress = self.laser.get_charge_progress();
+                let charge_text = Text::new(format!("LASER CHARGE: {:.0}%", charge_progress * 100.0));
+                let charge_color = Color::new(
+                    self.laser.color.r,
+                    self.laser.color.g,
+                    self.laser.color.b,
+                    1.0,
+                );
+                canvas.draw(
+                    &charge_text,
+                    DrawParam::default()
+                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 100.0, SCREEN_HEIGHT - 80.0) + shake_offset)
+                        .color(charge_color),
+                );
+                
+                // Draw charge bar
+                let bar_width = 200.0;
+                let bar_height = 10.0;
+                let bar_x = SCREEN_WIDTH / 2.0 - bar_width / 2.0;
+                let bar_y = SCREEN_HEIGHT - 60.0;
+                
+                // Background bar
+                let bg_bar = Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(bar_x, bar_y, bar_width, bar_height),
+                    Color::new(0.3, 0.3, 0.3, 0.8),
+                )?;
+                canvas.draw(&bg_bar, DrawParam::default().dest(shake_offset));
+                
+                // Charge bar
+                let charge_bar = Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(bar_x, bar_y, bar_width * charge_progress, bar_height),
+                    charge_color,
+                )?;
+                canvas.draw(&charge_bar, DrawParam::default().dest(shake_offset));
+            }
+
+            // Draw laser beam
+            if self.laser.is_firing {
+                let laser_bounds = self.laser.get_laser_bounds();
+                
+                // Laser glow effect
+                let glow_mesh = Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(
+                        laser_bounds.x - 5.0,
+                        laser_bounds.y,
+                        laser_bounds.w + 10.0,
+                        laser_bounds.h,
+                    ),
+                    Color::new(
+                        self.laser.color.r,
+                        self.laser.color.g,
+                        self.laser.color.b,
+                        0.3,
+                    ),
+                )?;
+                canvas.draw(&glow_mesh, DrawParam::default().dest(shake_offset));
+                
+                // Main laser beam
+                let laser_mesh = Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(
+                        laser_bounds.x,
+                        laser_bounds.y,
+                        laser_bounds.w,
+                        laser_bounds.h,
+                    ),
+                    self.laser.color,
+                )?;
+                canvas.draw(&laser_mesh, DrawParam::default().dest(shake_offset));
+                
+                // Laser core (brighter center)
+                let core_width = self.laser.width * 0.3;
+                let core_mesh = Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(
+                        laser_bounds.x + (laser_bounds.w - core_width) / 2.0,
+                        laser_bounds.y,
+                        core_width,
+                        laser_bounds.h,
+                    ),
+                    Color::new(1.0, 1.0, 1.0, 0.8),
+                )?;
+                canvas.draw(&core_mesh, DrawParam::default().dest(shake_offset));
             }
         }
 
@@ -1586,6 +1868,134 @@ impl EventHandler for GameState {
             self.keys_pressed.remove(&keycode);
         }
         Ok(())
+    }
+}
+
+struct Laser {
+    is_charging: bool,
+    charge_time: f32,
+    is_firing: bool,
+    fire_duration: f32,
+    max_fire_duration: f32,
+    damage: f32,
+    width: f32,
+    color: Color,
+    position: Vec2,
+    charge_particles: Vec<Particle>,
+}
+
+impl Laser {
+    fn new() -> Self {
+        Self {
+            is_charging: false,
+            charge_time: 0.0,
+            is_firing: false,
+            fire_duration: 0.0,
+            max_fire_duration: 0.5, // How long laser can fire
+            damage: LASER_DAMAGE_BASE,
+            width: LASER_WIDTH_BASE,
+            color: LASER_COLOR_BASE,
+            position: Vec2::ZERO,
+            charge_particles: Vec::new(),
+        }
+    }
+
+    fn start_charging(&mut self, position: Vec2) {
+        self.is_charging = true;
+        self.charge_time = 0.0;
+        self.position = position;
+        self.charge_particles.clear();
+    }
+
+    fn update_charging(&mut self, dt: f32) {
+        if !self.is_charging {
+            return;
+        }
+
+        self.charge_time += dt;
+        
+        // Update charge progress
+        let charge_progress = (self.charge_time / LASER_CHARGE_TIME).min(1.0);
+        self.damage = LASER_DAMAGE_BASE + (LASER_DAMAGE_MAX - LASER_DAMAGE_BASE) * charge_progress;
+        self.width = LASER_WIDTH_BASE + (LASER_WIDTH_MAX - LASER_WIDTH_BASE) * charge_progress;
+        
+        // Update color based on charge
+        let color_progress = charge_progress;
+        self.color = Color::new(
+            LASER_COLOR_BASE.r + (LASER_COLOR_CHARGED.r - LASER_COLOR_BASE.r) * color_progress,
+            LASER_COLOR_BASE.g + (LASER_COLOR_CHARGED.g - LASER_COLOR_BASE.g) * color_progress,
+            LASER_COLOR_BASE.b + (LASER_COLOR_CHARGED.b - LASER_COLOR_BASE.b) * color_progress,
+            1.0,
+        );
+
+        // Create charge particles
+        if self.charge_time > 0.1 {
+            let mut rng = rand::thread_rng();
+            for _ in 0..2 {
+                let angle = rng.gen_range(0.0..std::f32::consts::PI * 2.0);
+                let distance = rng.gen_range(20.0..40.0);
+                let particle_pos = self.position + Vec2::new(angle.cos() * distance, angle.sin() * distance);
+                let velocity = (self.position - particle_pos).normalize() * rng.gen_range(50.0..150.0);
+                let life = rng.gen_range(0.3..0.8);
+                let size = rng.gen_range(2.0..6.0);
+                
+                self.charge_particles.push(Particle::new(
+                    particle_pos,
+                    velocity,
+                    life,
+                    self.color,
+                    size,
+                ));
+            }
+        }
+
+        // Update charge particles
+        for particle in &mut self.charge_particles {
+            particle.update(dt);
+        }
+        self.charge_particles.retain(|p| !p.is_dead());
+    }
+
+    fn fire(&mut self) {
+        if self.is_charging && self.charge_time >= 0.2 { // Minimum charge time
+            self.is_charging = false;
+            self.is_firing = true;
+            self.fire_duration = 0.0;
+        }
+    }
+
+    fn update_firing(&mut self, dt: f32) {
+        if !self.is_firing {
+            return;
+        }
+
+        self.fire_duration += dt;
+        if self.fire_duration >= self.max_fire_duration {
+            self.is_firing = false;
+            self.fire_duration = 0.0;
+        }
+    }
+
+    fn get_laser_bounds(&self) -> Rect {
+        if !self.is_firing {
+            return Rect::new(0.0, 0.0, 0.0, 0.0);
+        }
+        
+        // Laser extends from player position to top of screen
+        Rect::new(
+            self.position.x - self.width / 2.0,
+            0.0,
+            self.width,
+            self.position.y,
+        )
+    }
+
+    fn is_active(&self) -> bool {
+        self.is_charging || self.is_firing
+    }
+
+    fn get_charge_progress(&self) -> f32 {
+        (self.charge_time / LASER_CHARGE_TIME).min(1.0)
     }
 }
 
