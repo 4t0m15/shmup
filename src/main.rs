@@ -9,6 +9,7 @@ use ggez::glam::Vec2;
 use rand::Rng;
 use std::fs;
 use std::io::Write;
+use std::collections::HashSet;
 
 const SCREEN_WIDTH: f32 = 800.0;
 const SCREEN_HEIGHT: f32 = 600.0;
@@ -40,10 +41,143 @@ enum EnemyType {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+enum BossType {
+    Destroyer,
+    Carrier,
+    Behemoth,
+}
+
+#[derive(Clone, Copy, PartialEq)]
 enum PowerUpType {
     RapidFire,
     TripleShot,
     Shield,
+}
+
+#[derive(Clone)]
+struct Boss {
+    position: Vec2,
+    velocity: Vec2,
+    size: f32,
+    health: f32,
+    max_health: f32,
+    boss_type: BossType,
+    phase: u32,
+    attack_timer: f32,
+    attack_pattern: f32,
+    movement_timer: f32,
+    active: bool,
+}
+
+impl Boss {
+    fn new(boss_type: BossType) -> Self {
+        let (size, health) = match boss_type {
+            BossType::Destroyer => (60.0, 300.0),
+            BossType::Carrier => (80.0, 500.0),
+            BossType::Behemoth => (100.0, 800.0),
+        };
+        
+        Self {
+            position: Vec2::new(SCREEN_WIDTH / 2.0, -size),
+            velocity: Vec2::new(0.0, 50.0),
+            size,
+            health,
+            max_health: health,
+            boss_type,
+            phase: 1,
+            attack_timer: 0.0,
+            attack_pattern: 0.0,
+            movement_timer: 0.0,
+            active: true,
+        }
+    }
+
+    fn update(&mut self, dt: f32) {
+        self.position += self.velocity * dt;
+        self.attack_timer += dt;
+        self.attack_pattern += dt;
+        self.movement_timer += dt;
+        
+        // Move to battle position
+        if self.position.y < 100.0 {
+            self.velocity.y = 50.0;
+        } else {
+            self.velocity.y = 0.0;
+            self.position.y = 100.0;
+        }
+        
+        // Boss movement patterns
+        match self.boss_type {
+            BossType::Destroyer => {
+                if self.movement_timer > 2.0 {
+                    self.velocity.x = if self.position.x < SCREEN_WIDTH / 2.0 { 100.0 } else { -100.0 };
+                    self.movement_timer = 0.0;
+                }
+            }
+            BossType::Carrier => {
+                let sine_wave = (self.movement_timer * 0.5).sin() * 200.0;
+                self.velocity.x = sine_wave;
+            }
+            BossType::Behemoth => {
+                if self.movement_timer > 3.0 {
+                    self.velocity.x = if self.velocity.x > 0.0 { -80.0 } else { 80.0 };
+                    self.movement_timer = 0.0;
+                }
+            }
+        }
+        
+        // Keep boss in bounds
+        self.position.x = self.position.x.clamp(self.size / 2.0, SCREEN_WIDTH - self.size / 2.0);
+    }
+
+    fn take_damage(&mut self, damage: f32) {
+        self.health -= damage;
+        if self.health <= 0.0 {
+            self.active = false;
+        } else if self.health <= self.max_health * 0.5 && self.phase == 1 {
+            self.phase = 2;
+            // Phase 2: More aggressive
+        } else if self.health <= self.max_health * 0.25 && self.phase == 2 {
+            self.phase = 3;
+            // Phase 3: Desperate attacks
+        }
+    }
+
+    fn get_bullet_spawn_points(&self) -> Vec<Vec2> {
+        match self.boss_type {
+            BossType::Destroyer => {
+                vec![
+                    self.position + Vec2::new(-20.0, self.size / 2.0),
+                    self.position + Vec2::new(20.0, self.size / 2.0),
+                ]
+            }
+            BossType::Carrier => {
+                vec![
+                    self.position + Vec2::new(-30.0, self.size / 2.0),
+                    self.position + Vec2::new(0.0, self.size / 2.0),
+                    self.position + Vec2::new(30.0, self.size / 2.0),
+                ]
+            }
+            BossType::Behemoth => {
+                vec![
+                    self.position + Vec2::new(-40.0, self.size / 2.0),
+                    self.position + Vec2::new(-20.0, self.size / 2.0),
+                    self.position + Vec2::new(0.0, self.size / 2.0),
+                    self.position + Vec2::new(20.0, self.size / 2.0),
+                    self.position + Vec2::new(40.0, self.size / 2.0),
+                ]
+            }
+        }
+    }
+
+    fn get_color(&self) -> Color {
+        let _health_percent = self.health / self.max_health;
+        match self.boss_type {
+            BossType::Destroyer => Color::new(1.0, 0.2, 0.2, 1.0),
+            BossType::Carrier => Color::new(0.8, 0.2, 0.8, 1.0),
+            BossType::Behemoth => Color::new(0.2, 0.2, 1.0, 1.0),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -199,7 +333,6 @@ impl Particle {
 }
 
 struct Explosion {
-    position: Vec2,
     timer: f32,
     particles: Vec<Particle>,
 }
@@ -224,7 +357,7 @@ impl Explosion {
             particles.push(Particle::new(position, velocity, life, color, size));
         }
         
-        Self { position, timer: 0.0, particles }
+        Self { timer: 0.0, particles }
     }
 
     fn update(&mut self, dt: f32) {
@@ -280,6 +413,8 @@ struct GameState {
     player: GameObject,
     bullets: Vec<GameObject>,
     enemies: Vec<GameObject>,
+    boss: Option<Boss>,
+    boss_bullets: Vec<GameObject>,
     score: u32,
     enemy_spawn_timer: f32,
     game_over: bool,
@@ -298,6 +433,12 @@ struct GameState {
     combo_multiplier: f32,
     max_combo: u32,
     combo_texts: Vec<ComboText>,
+    // Input state tracking
+    keys_pressed: std::collections::HashSet<KeyCode>,
+    fire_cooldown: f32,
+    fire_rate: f32, // Shots per second
+    boss_spawn_score: u32, // Track when to spawn next boss
+    boss_warning_timer: f32, // Timer for boss warning text
 }
 
 impl GameState {
@@ -364,6 +505,8 @@ impl GameState {
             ),
             bullets: Vec::new(),
             enemies: Vec::new(),
+            boss: None,
+            boss_bullets: Vec::new(),
             score: 0,
             enemy_spawn_timer: 0.0,
             game_over: false,
@@ -382,6 +525,12 @@ impl GameState {
             combo_multiplier: 1.0,
             max_combo: 0,
             combo_texts: Vec::new(),
+            // Input state tracking
+            keys_pressed: HashSet::new(),
+            fire_cooldown: 0.0,
+            fire_rate: 10.0, // Default fire rate
+            boss_spawn_score: 0, // Initialize boss spawn score
+            boss_warning_timer: 0.0, // Initialize boss warning timer
         }
     }
 
@@ -433,6 +582,19 @@ impl GameState {
         let power_up = PowerUp::new(Vec2::new(x, -20.0), power_type);
         self.power_ups.push(power_up);
     }
+
+    fn spawn_boss(&mut self) {
+        let mut rng = rand::thread_rng();
+        let boss_type = match rng.gen_range(0..3) {
+            0 => BossType::Destroyer,
+            1 => BossType::Carrier,
+            _ => BossType::Behemoth,
+        };
+        self.boss = Some(Boss::new(boss_type));
+        self.boss_warning_timer = 3.0; // Show warning for 3 seconds
+    }
+
+
 
     fn shoot(&mut self) {
         let base_bullet = GameObject::new(
@@ -558,6 +720,129 @@ impl GameState {
         self.bullets.retain(|bullet| bullet.active);
         self.enemies.retain(|enemy| enemy.active);
         self.power_ups.retain(|power_up| power_up.active);
+        
+        // Check bullet-boss collisions
+        if let Some(boss) = &mut self.boss {
+            if boss.active {
+                let mut bullets_to_destroy = Vec::new();
+                let mut boss_defeated = false;
+                let mut boss_position = boss.position;
+                let mut boss_type = boss.boss_type;
+                let mut boss_combo_effects = Vec::new();
+                
+                for (bullet_idx, bullet) in self.bullets.iter_mut().enumerate() {
+                    if bullet.active && bullet.collides_with(&GameObject::new(boss.position, Vec2::ZERO, boss.size)) {
+                        bullets_to_destroy.push(bullet_idx);
+                        boss.take_damage(10.0);
+                        
+                        // Update combo system for boss hits
+                        self.combo_counter += 1;
+                        self.combo_timer = COMBO_TIMEOUT;
+                        self.combo_multiplier = (COMBO_MULTIPLIER_BASE * self.combo_counter as f32).min(COMBO_MULTIPLIER_CAP);
+                        if self.combo_counter > self.max_combo {
+                            self.max_combo = self.combo_counter;
+                        }
+                        
+                        // Boss damage gives more points
+                        let boss_score = match boss.boss_type {
+                            BossType::Destroyer => 50,
+                            BossType::Carrier => 75,
+                            BossType::Behemoth => 100,
+                        };
+                        let combo_score = (boss_score as f32 * self.combo_multiplier) as u32;
+                        self.score += combo_score;
+                        
+                        // Create explosion effect
+                        self.explosions.push(Explosion::new(bullet.position));
+                        self.screen_shake = 0.15;
+                        
+                        // Store combo effect position
+                        if self.combo_counter > 1 {
+                            boss_combo_effects.push(bullet.position);
+                        }
+                        
+                        // Check if boss is defeated
+                        if !boss.active {
+                            boss_defeated = true;
+                            boss_position = boss.position;
+                            boss_type = boss.boss_type;
+                        }
+                    }
+                }
+                
+                // Apply bullet destruction
+                for &bullet_idx in bullets_to_destroy.iter().rev() {
+                    self.bullets[bullet_idx].active = false;
+                }
+                
+                // Create combo text effects for boss hits
+                for position in boss_combo_effects {
+                    self.create_combo_text_effect(position);
+                }
+                
+                // Handle boss defeat
+                if boss_defeated {
+                    // Big explosion for boss defeat
+                    for _ in 0..3 {
+                        self.explosions.push(Explosion::new(boss_position));
+                    }
+                    self.screen_shake = 0.3;
+                    
+                    // Bonus score for defeating boss
+                    let defeat_bonus = match boss_type {
+                        BossType::Destroyer => 1000,
+                        BossType::Carrier => 1500,
+                        BossType::Behemoth => 2000,
+                    };
+                    self.score += defeat_bonus;
+                    
+                    // Reset combo after boss defeat
+                    self.combo_counter = 0;
+                    self.combo_multiplier = 1.0;
+                    self.combo_timer = 0.0;
+                }
+            }
+        }
+        
+        // Check player-boss bullet collisions
+        let mut boss_bullets_to_destroy = Vec::new();
+        let mut player_hit_by_boss_bullet = false;
+        
+        for (bullet_idx, boss_bullet) in self.boss_bullets.iter_mut().enumerate() {
+            if boss_bullet.active && self.player.collides_with(boss_bullet) {
+                boss_bullets_to_destroy.push(bullet_idx);
+                player_hit_by_boss_bullet = true;
+            }
+        }
+        
+        // Apply boss bullet destruction
+        for &bullet_idx in boss_bullets_to_destroy.iter().rev() {
+            self.boss_bullets[bullet_idx].active = false;
+        }
+        
+        // Handle player hit by boss bullet
+        if player_hit_by_boss_bullet {
+            if self.invincible_timer <= 0.0 && self.power_up_timers[2] <= 0.0 {
+                if self.lives > 1 {
+                    self.lives -= 1;
+                    self.player.position = Vec2::new(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT - 50.0);
+                    self.player.velocity = Vec2::ZERO;
+                    self.invincible_timer = 1.0;
+                    self.screen_shake = 0.2;
+                    
+                    // Reset combo when player is hit
+                    self.combo_counter = 0;
+                    self.combo_multiplier = 1.0;
+                    self.combo_timer = 0.0;
+                } else {
+                    self.game_over = true;
+                    self.check_high_score();
+                }
+            }
+        }
+        
+        // Clean up boss bullets
+        self.boss_bullets.retain(|bullet| bullet.active);
     }
 }
 
@@ -606,6 +891,14 @@ impl EventHandler for GameState {
             }
         }
 
+        // Update boss warning timer
+        if self.boss_warning_timer > 0.0 {
+            self.boss_warning_timer -= dt;
+            if self.boss_warning_timer < 0.0 {
+                self.boss_warning_timer = 0.0;
+            }
+        }
+
         // Update stars
         for star in &mut self.stars {
             star.update(dt);
@@ -622,6 +915,47 @@ impl EventHandler for GameState {
                 );
                 particle.life = rng.gen_range(2.0..5.0);
             }
+        }
+
+        // Handle continuous input for movement
+        self.player.velocity = Vec2::ZERO;
+        for &key in &self.keys_pressed {
+            match key {
+                KeyCode::A | KeyCode::Left => {
+                    self.player.velocity.x -= PLAYER_SPEED;
+                }
+                KeyCode::D | KeyCode::Right => {
+                    self.player.velocity.x += PLAYER_SPEED;
+                }
+                KeyCode::W | KeyCode::Up => {
+                    self.player.velocity.y -= PLAYER_SPEED;
+                }
+                KeyCode::S | KeyCode::Down => {
+                    self.player.velocity.y += PLAYER_SPEED;
+                }
+                _ => {}
+            }
+        }
+        
+        // Normalize diagonal movement to prevent faster diagonal speed
+        if self.player.velocity.length() > PLAYER_SPEED {
+            self.player.velocity = self.player.velocity.normalize() * PLAYER_SPEED;
+        }
+
+        // Handle firing with cooldown
+        if self.keys_pressed.contains(&KeyCode::Space) && !self.game_over {
+            if self.fire_cooldown <= 0.0 {
+                self.shoot();
+                // Set cooldown based on fire rate and power-ups
+                let base_cooldown = 1.0 / self.fire_rate;
+                let rapid_fire_multiplier = if self.power_up_timers[0] > 0.0 { 0.3 } else { 1.0 };
+                self.fire_cooldown = base_cooldown * rapid_fire_multiplier;
+            }
+        }
+
+        // Update fire cooldown
+        if self.fire_cooldown > 0.0 {
+            self.fire_cooldown -= dt;
         }
 
         // Update player
@@ -686,6 +1020,78 @@ impl EventHandler for GameState {
         if self.power_up_spawn_timer >= 8.0 {
             self.spawn_power_up();
             self.power_up_spawn_timer = 0.0;
+        }
+
+        // Check for boss spawning (every 10,000 points)
+        if self.score >= self.boss_spawn_score + 10000 && self.boss.is_none() {
+            self.spawn_boss();
+            self.boss_spawn_score = self.score;
+        }
+
+        // Update boss
+        if let Some(boss) = &mut self.boss {
+            boss.update(dt);
+            
+            // Spawn boss bullets based on attack patterns
+            let attack_interval = match boss.boss_type {
+                BossType::Destroyer => if boss.phase == 1 { 0.8 } else { 0.5 },
+                BossType::Carrier => if boss.phase == 1 { 1.2 } else { 0.8 },
+                BossType::Behemoth => if boss.phase == 1 { 1.0 } else { 0.6 },
+            };
+            
+            if boss.attack_timer >= attack_interval {
+                // Store boss info for bullet spawning
+                let spawn_points = boss.get_bullet_spawn_points();
+                let boss_type = boss.boss_type;
+                let phase = boss.phase;
+                let attack_pattern = boss.attack_pattern;
+                
+                // Spawn bullets without borrowing self
+                for spawn_point in spawn_points {
+                    let bullet_speed = match boss_type {
+                        BossType::Destroyer => 200.0,
+                        BossType::Carrier => 150.0,
+                        BossType::Behemoth => 180.0,
+                    };
+                    
+                    let mut rng = rand::thread_rng();
+                    let velocity = match boss_type {
+                        BossType::Destroyer => {
+                            if phase == 1 {
+                                Vec2::new(0.0, bullet_speed)
+                            } else {
+                                let angle: f32 = rng.gen_range(-0.3..0.3);
+                                Vec2::new(angle.sin() * bullet_speed, angle.cos() * bullet_speed)
+                            }
+                        }
+                        BossType::Carrier => {
+                            let spread = if phase == 1 { 0.2 } else { 0.4 };
+                            let angle: f32 = rng.gen_range(-spread..spread);
+                            Vec2::new(angle.sin() * bullet_speed, angle.cos() * bullet_speed)
+                        }
+                        BossType::Behemoth => {
+                            let angle = (attack_pattern * 2.0_f32).sin() * 0.5;
+                            Vec2::new(angle * bullet_speed, bullet_speed)
+                        }
+                    };
+                    
+                    let bullet = GameObject::new(spawn_point, velocity, 8.0);
+                    self.boss_bullets.push(bullet);
+                }
+                
+                boss.attack_timer = 0.0;
+            }
+        }
+
+        // Update boss bullets
+        for boss_bullet in &mut self.boss_bullets {
+            boss_bullet.update(dt);
+            // Remove boss bullets that go off screen
+            if boss_bullet.position.y > SCREEN_HEIGHT + boss_bullet.size || 
+               boss_bullet.position.x < -boss_bullet.size || 
+               boss_bullet.position.x > SCREEN_WIDTH + boss_bullet.size {
+                boss_bullet.active = false;
+            }
         }
 
         // Update collisions
@@ -922,6 +1328,97 @@ impl EventHandler for GameState {
                 }
             }
 
+            // Draw boss
+            if let Some(boss) = &self.boss {
+                if boss.active {
+                    let boss_color = boss.get_color();
+                    
+                    // Boss glow effect
+                    let glow_mesh = Mesh::new_circle(
+                        ctx,
+                        DrawMode::fill(),
+                        boss.position + shake_offset,
+                        boss.size * 1.2,
+                        0.2,
+                        Color::new(boss_color.r, boss_color.g, boss_color.b, 0.3),
+                    )?;
+                    canvas.draw(&glow_mesh, DrawParam::default());
+                    
+                    // Main boss body
+                    let boss_mesh = Mesh::new_rectangle(
+                        ctx,
+                        DrawMode::fill(),
+                        Rect::new(
+                            -boss.size / 2.0,
+                            -boss.size / 2.0,
+                            boss.size,
+                            boss.size,
+                        ),
+                        boss_color,
+                    )?;
+                    canvas.draw(
+                        &boss_mesh,
+                        DrawParam::default().dest(boss.position + shake_offset),
+                    );
+                    
+                    // Boss health bar
+                    let health_percent = boss.health / boss.max_health;
+                    let bar_width = boss.size;
+                    let bar_height = 8.0;
+                    let bar_x = boss.position.x - bar_width / 2.0;
+                    let bar_y = boss.position.y - boss.size / 2.0 - 20.0;
+                    
+                    // Background bar
+                    let bg_bar = Mesh::new_rectangle(
+                        ctx,
+                        DrawMode::fill(),
+                        Rect::new(bar_x, bar_y, bar_width, bar_height),
+                        Color::new(0.3, 0.3, 0.3, 0.8),
+                    )?;
+                    canvas.draw(&bg_bar, DrawParam::default().dest(shake_offset));
+                    
+                    // Health bar
+                    let health_bar = Mesh::new_rectangle(
+                        ctx,
+                        DrawMode::fill(),
+                        Rect::new(bar_x, bar_y, bar_width * health_percent, bar_height),
+                        Color::new(1.0 - health_percent, health_percent, 0.0, 1.0),
+                    )?;
+                    canvas.draw(&health_bar, DrawParam::default().dest(shake_offset));
+                }
+            }
+
+            // Draw boss bullets
+            for boss_bullet in &self.boss_bullets {
+                if boss_bullet.active {
+                    // Boss bullet trail
+                    for i in 1..4 {
+                        let trail_pos = boss_bullet.position + boss_bullet.velocity * (i as f32 * -0.01);
+                        let trail_alpha = 0.4 / i as f32;
+                        let trail_mesh = Mesh::new_circle(
+                            ctx,
+                            DrawMode::fill(),
+                            trail_pos + shake_offset,
+                            boss_bullet.size / 2.0 * (1.0 - i as f32 * 0.2),
+                            0.1,
+                            Color::new(1.0, 0.2, 0.2, trail_alpha),
+                        )?;
+                        canvas.draw(&trail_mesh, DrawParam::default());
+                    }
+                    
+                    // Main boss bullet
+                    let boss_bullet_mesh = Mesh::new_circle(
+                        ctx,
+                        DrawMode::fill(),
+                        boss_bullet.position + shake_offset,
+                        boss_bullet.size / 2.0,
+                        0.1,
+                        Color::new(1.0, 0.2, 0.2, 1.0),
+                    )?;
+                    canvas.draw(&boss_bullet_mesh, DrawParam::default());
+                }
+            }
+
             // Draw explosions with particles
             for explosion in &self.explosions {
                 for particle in &explosion.particles {
@@ -1043,6 +1540,23 @@ impl EventHandler for GameState {
                         .color(Color::new(0.2, 0.5, 1.0, 1.0)),
                 );
             }
+
+            // Draw boss warning
+            if self.boss.is_some() && self.boss_warning_timer > 0.0 {
+                let boss_warning = Text::new("BOSS BATTLE!");
+                let pulse = (std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f32() * 4.0)
+                    .sin() * 0.5 + 0.5;
+                let warning_color = Color::new(1.0, 0.0, 0.0, pulse);
+                canvas.draw(
+                    &boss_warning,
+                    DrawParam::default()
+                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 80.0, 80.0) + shake_offset)
+                        .color(warning_color),
+                );
+            }
         }
 
         canvas.finish(ctx)?;
@@ -1055,48 +1569,21 @@ impl EventHandler for GameState {
         input: KeyInput,
         _repeat: bool,
     ) -> GameResult {
-        match input.keycode {
-            Some(KeyCode::A) | Some(KeyCode::Left) => {
-                self.player.velocity.x = -PLAYER_SPEED;
+        if let Some(keycode) = input.keycode {
+            self.keys_pressed.insert(keycode);
+            
+            // Handle restart key
+            if keycode == KeyCode::R && self.game_over {
+                *self = GameState::new();
+                self.check_high_score();
             }
-            Some(KeyCode::D) | Some(KeyCode::Right) => {
-                self.player.velocity.x = PLAYER_SPEED;
-            }
-            Some(KeyCode::W) | Some(KeyCode::Up) => {
-                self.player.velocity.y = -PLAYER_SPEED;
-            }
-            Some(KeyCode::S) | Some(KeyCode::Down) => {
-                self.player.velocity.y = PLAYER_SPEED;
-            }
-            Some(KeyCode::Space) => {
-                if !self.game_over {
-                    if self.power_up_timers[0] > 0.0 { // Rapid fire
-                        self.shoot();
-                    } else {
-                        self.shoot();
-                    }
-                }
-            }
-            Some(KeyCode::R) => {
-                if self.game_over {
-                    *self = GameState::new();
-                    self.check_high_score();
-                }
-            }
-            _ => {}
         }
         Ok(())
     }
 
     fn key_up_event(&mut self, _ctx: &mut Context, input: KeyInput) -> GameResult {
-        match input.keycode {
-            Some(KeyCode::A) | Some(KeyCode::D) | Some(KeyCode::Left) | Some(KeyCode::Right) => {
-                self.player.velocity.x = 0.0;
-            }
-            Some(KeyCode::W) | Some(KeyCode::S) | Some(KeyCode::Up) | Some(KeyCode::Down) => {
-                self.player.velocity.y = 0.0;
-            }
-            _ => {}
+        if let Some(keycode) = input.keycode {
+            self.keys_pressed.remove(&keycode);
         }
         Ok(())
     }
