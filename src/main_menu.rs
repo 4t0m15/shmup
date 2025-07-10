@@ -30,6 +30,7 @@ pub enum MenuScreen {
     Main,
     Stats,
     Controls,
+    About,
 }
 
 #[derive(Debug)]
@@ -43,6 +44,7 @@ pub struct MainMenu {
     play_btn_rect: Rect,
     stats_btn_rect: Rect,
     controls_btn_rect: Rect,
+    about_btn_rect: Rect,
     quit_btn_rect: Rect,
     back_btn_rect: Rect,
     
@@ -51,6 +53,7 @@ pub struct MainMenu {
     play_text: Text,
     stats_text: Text,
     controls_text: Text,
+    about_text: Text,
     quit_text: Text,
     back_text: Text,
     
@@ -59,6 +62,9 @@ pub struct MainMenu {
     
     // Controls display
     controls_display: Vec<Text>,
+    
+    // About display
+    about_display: Vec<Text>,
     
     // Visual elements
     time: f32,
@@ -77,14 +83,16 @@ impl MainMenu {
         let play_btn_rect = Rect::new(center_x, start_y, BUTTON_W, BUTTON_H);
         let stats_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING, BUTTON_W, BUTTON_H);
         let controls_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING * 2.0, BUTTON_W, BUTTON_H);
-        let quit_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING * 3.0, BUTTON_W, BUTTON_H);
+        let about_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING * 3.0, BUTTON_W, BUTTON_H);
+        let quit_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING * 4.0, BUTTON_W, BUTTON_H);
         let back_btn_rect = Rect::new(SCREEN_WIDTH * 0.1, SCREEN_HEIGHT * 0.9, 100.0, 40.0);
         
         // Create text elements
-        let subtitle_text = Text::new(graphics::TextFragment::new("Space Shooter").scale(SUBTITLE_SCALE));
+        let subtitle_text = Text::new(graphics::TextFragment::new("Thanks for Reviewing, John!").scale(SUBTITLE_SCALE));
         let play_text = Text::new(graphics::TextFragment::new("PLAY").scale(24.0));
         let stats_text = Text::new(graphics::TextFragment::new("STATISTICS").scale(24.0));
         let controls_text = Text::new(graphics::TextFragment::new("CONTROLS").scale(24.0));
+        let about_text = Text::new(graphics::TextFragment::new("ABOUT").scale(24.0));
         let quit_text = Text::new(graphics::TextFragment::new("QUIT").scale(24.0));
         let back_text = Text::new(graphics::TextFragment::new("BACK").scale(20.0));
         
@@ -93,6 +101,9 @@ impl MainMenu {
         
         // Create controls display
         let controls_display = Self::create_controls_display();
+        
+        // Create about display
+        let about_display = Self::create_about_display();
         
         // Create starfield
         let mut rng = rand::thread_rng();
@@ -108,16 +119,19 @@ impl MainMenu {
             play_btn_rect,
             stats_btn_rect,
             controls_btn_rect,
+            about_btn_rect,
             quit_btn_rect,
             back_btn_rect,
             subtitle_text,
             play_text,
             stats_text,
             controls_text,
+            about_text,
             quit_text,
             back_text,
             stats_display,
             controls_display,
+            about_display,
             time: 0.0,
             stars,
             stats,
@@ -147,7 +161,6 @@ impl MainMenu {
     
     fn create_controls_display() -> Vec<Text> {
         vec![
-            Text::new(graphics::TextFragment::new("CONTROLS").scale(24.0)),
             Text::new(graphics::TextFragment::new("").scale(20.0)), // Spacer
             Text::new(graphics::TextFragment::new("Movement:").scale(20.0)),
             Text::new(graphics::TextFragment::new("  WASD or Arrow Keys").scale(18.0)),
@@ -155,17 +168,29 @@ impl MainMenu {
             Text::new(graphics::TextFragment::new("Combat:").scale(20.0)),
             Text::new(graphics::TextFragment::new("  SPACE - Fire bullets").scale(18.0)),
             Text::new(graphics::TextFragment::new("  Hold SPACE - Charge laser (when available)").scale(18.0)),
-            Text::new(graphics::TextFragment::new("").scale(20.0)), // Spacer
-            Text::new(graphics::TextFragment::new("Power-ups:").scale(20.0)),
-            Text::new(graphics::TextFragment::new("  Rapid Fire - Faster shooting").scale(18.0)),
-            Text::new(graphics::TextFragment::new("  Triple Shot - Three bullets at once").scale(18.0)),
-            Text::new(graphics::TextFragment::new("  Shield - Temporary invincibility").scale(18.0)),
-            Text::new(graphics::TextFragment::new("  Laser - Powerful beam weapon").scale(18.0)),
-            Text::new(graphics::TextFragment::new("").scale(20.0)), // Spacer
-            Text::new(graphics::TextFragment::new("Objective:").scale(20.0)),
-            Text::new(graphics::TextFragment::new("  Survive as long as possible").scale(18.0)),
-            Text::new(graphics::TextFragment::new("  Build combos for higher scores").scale(18.0)),
-            Text::new(graphics::TextFragment::new("  Collect power-ups to survive longer").scale(18.0)),
+        ]
+    }
+    
+    fn create_about_display() -> Vec<Text> {
+        vec![
+            Text::new(graphics::TextFragment::new("Survive and get a high score!").scale(16.0)),
+            Text::new(graphics::TextFragment::new("").scale(16.0)), // Spacer
+            Text::new(graphics::TextFragment::new("ENEMIES & SCORING:").scale(18.0)),
+            Text::new(graphics::TextFragment::new("Normal Enemy (Red) - 10 points").scale(16.0)),
+            Text::new(graphics::TextFragment::new("Fast Enemy (Green) - 10 points").scale(16.0)),
+            Text::new(graphics::TextFragment::new("Big Enemy (Magenta) - 30 points").scale(16.0)),
+            Text::new(graphics::TextFragment::new("Zenith (White) - 50 points").scale(16.0)),
+            Text::new(graphics::TextFragment::new("").scale(16.0)), // Spacer
+            Text::new(graphics::TextFragment::new("BOSSES:").scale(18.0)),
+            Text::new(graphics::TextFragment::new("Destroyer (Red) - 1000 points").scale(16.0)),
+            Text::new(graphics::TextFragment::new("Carrier (Purple) - 1500 points").scale(16.0)),
+            Text::new(graphics::TextFragment::new("Behemoth (Blue) - 2000 points").scale(16.0)),
+            Text::new(graphics::TextFragment::new("").scale(16.0)), // Spacer
+            Text::new(graphics::TextFragment::new("COMBOS:").scale(18.0)),
+            Text::new(graphics::TextFragment::new("Kill enemies quickly to build combos!").scale(16.0)),
+            Text::new(graphics::TextFragment::new("Higher combos = higher score multipliers.").scale(16.0)),
+            Text::new(graphics::TextFragment::new("").scale(16.0)), // Spacer
+            Text::new(graphics::TextFragment::new("Version: 0.1.0").scale(16.0)),
         ]
     }
     
@@ -279,7 +304,8 @@ impl EventHandler for MainMenu {
                 self.draw_button(&mut canvas, ctx, &self.play_btn_rect, &self.play_text, self.selected_button == 0)?;
                 self.draw_button(&mut canvas, ctx, &self.stats_btn_rect, &self.stats_text, self.selected_button == 1)?;
                 self.draw_button(&mut canvas, ctx, &self.controls_btn_rect, &self.controls_text, self.selected_button == 2)?;
-                self.draw_button(&mut canvas, ctx, &self.quit_btn_rect, &self.quit_text, self.selected_button == 3)?;
+                self.draw_button(&mut canvas, ctx, &self.about_btn_rect, &self.about_text, self.selected_button == 3)?;
+                self.draw_button(&mut canvas, ctx, &self.quit_btn_rect, &self.quit_text, self.selected_button == 4)?;
             }
             
             MenuScreen::Stats => {
@@ -333,6 +359,32 @@ impl EventHandler for MainMenu {
                 // Back button
                 self.draw_button(&mut canvas, ctx, &self.back_btn_rect, &self.back_text, false)?;
             }
+            
+            MenuScreen::About => {
+                // Title
+                let title = Text::new(graphics::TextFragment::new("ABOUT").scale(40.0));
+                canvas.draw(
+                    &title,
+                    DrawParam::default()
+                        .dest(Vec2::new(SCREEN_WIDTH * 0.5 - title.dimensions(ctx).unwrap().w as f32 / 2.0, 50.0))
+                        .color(Color::YELLOW),
+                );
+                
+                // Draw about content
+                let mut y_offset = 100.0;
+                for about_text in &self.about_display {
+                    canvas.draw(
+                        about_text,
+                        DrawParam::default()
+                            .dest(Vec2::new(SCREEN_WIDTH * 0.5 - about_text.dimensions(ctx).unwrap().w as f32 / 2.0, y_offset))
+                            .color(Color::WHITE),
+                    );
+                    y_offset += 22.0; // Reduced spacing for smaller text
+                }
+                
+                // Back button
+                self.draw_button(&mut canvas, ctx, &self.back_btn_rect, &self.back_text, false)?;
+            }
         }
 
         canvas.finish(ctx)?;
@@ -350,11 +402,13 @@ impl EventHandler for MainMenu {
                         self.refresh_stats();
                     } else if self.controls_btn_rect.contains([x, y]) {
                         self.current_screen = MenuScreen::Controls;
+                    } else if self.about_btn_rect.contains([x, y]) {
+                        self.current_screen = MenuScreen::About;
                     } else if self.quit_btn_rect.contains([x, y]) {
                         self.action = MenuAction::Quit;
                     }
                 }
-                MenuScreen::Stats | MenuScreen::Controls => {
+                MenuScreen::Stats | MenuScreen::Controls | MenuScreen::About => {
                     if self.back_btn_rect.contains([x, y]) {
                         self.current_screen = MenuScreen::Main;
                     }
@@ -374,7 +428,7 @@ impl EventHandler for MainMenu {
                         }
                     }
                     Some(ggez::input::keyboard::KeyCode::Down) => {
-                        if self.selected_button < 3 {
+                        if self.selected_button < 4 { // Updated to 4 for new buttons
                             self.selected_button += 1;
                         }
                     }
@@ -386,14 +440,15 @@ impl EventHandler for MainMenu {
                                 self.refresh_stats();
                             }
                             2 => self.current_screen = MenuScreen::Controls,
-                            3 => self.action = MenuAction::Quit,
+                            3 => self.current_screen = MenuScreen::About,
+                            4 => self.action = MenuAction::Quit,
                             _ => {}
                         }
                     }
                     _ => {}
                 }
             }
-            MenuScreen::Stats | MenuScreen::Controls => {
+            MenuScreen::Stats | MenuScreen::Controls | MenuScreen::About => {
                 if let Some(ggez::input::keyboard::KeyCode::Escape) = input.keycode {
                     self.current_screen = MenuScreen::Main;
                 }
