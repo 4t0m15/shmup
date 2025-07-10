@@ -25,6 +25,7 @@ pub struct Boss {
 
 impl Boss {
     pub fn new(boss_type: BossType) -> Self {
+        let scaling = get_scaling();
         let (size, health) = match boss_type {
             BossType::Destroyer => (60.0, 300.0),
             BossType::Carrier => (80.0, 500.0),
@@ -32,9 +33,9 @@ impl Boss {
         };
         
         Self {
-            position: Vec2::new(SCREEN_WIDTH / 2.0, -size),
-            velocity: Vec2::new(0.0, 50.0),
-            size,
+            position: Vec2::new(get_screen_width() / 2.0, -scaling.scale_size(size)),
+            velocity: Vec2::new(0.0, scaling.scale_speed(50.0)),
+            size: scaling.scale_size(size),
             health,
             max_health: health,
             boss_type,
@@ -64,7 +65,7 @@ impl Boss {
         match self.boss_type {
             BossType::Destroyer => {
                 if self.movement_timer > 2.0 {
-                    self.velocity.x = if self.position.x < SCREEN_WIDTH / 2.0 { 100.0 } else { -100.0 };
+                    self.velocity.x = if self.position.x < get_screen_width() / 2.0 { 100.0 } else { -100.0 };
                     self.movement_timer = 0.0;
                 }
             }
@@ -81,7 +82,7 @@ impl Boss {
         }
         
         // Keep boss in bounds
-        self.position.x = self.position.x.clamp(self.size / 2.0, SCREEN_WIDTH - self.size / 2.0);
+        self.position.x = self.position.x.clamp(self.size / 2.0, get_screen_width() - self.size / 2.0);
     }
 
     pub fn take_damage(&mut self, damage: f32) {

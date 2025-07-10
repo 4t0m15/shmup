@@ -5,7 +5,7 @@ use ggez::{
     Context, GameResult,
 };
 
-use crate::constants::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use crate::constants::{get_screen_width, get_screen_height};
 use crate::effects::star::Star;
 use crate::game_state::GameStats;
 
@@ -77,15 +77,15 @@ impl MainMenu {
         let stats = GameStats::load();
         
         // Create button rectangles
-        let center_x = SCREEN_WIDTH * 0.5 - BUTTON_W * 0.5;
-        let start_y = SCREEN_HEIGHT * 0.4;
+        let center_x = get_screen_width() * 0.5 - BUTTON_W * 0.5;
+        let start_y = get_screen_height() * 0.4;
         
         let play_btn_rect = Rect::new(center_x, start_y, BUTTON_W, BUTTON_H);
         let stats_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING, BUTTON_W, BUTTON_H);
         let controls_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING * 2.0, BUTTON_W, BUTTON_H);
         let about_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING * 3.0, BUTTON_W, BUTTON_H);
         let quit_btn_rect = Rect::new(center_x, start_y + BUTTON_SPACING * 4.0, BUTTON_W, BUTTON_H);
-        let back_btn_rect = Rect::new(SCREEN_WIDTH * 0.1, SCREEN_HEIGHT * 0.9, 100.0, 40.0);
+        let back_btn_rect = Rect::new(get_screen_width() * 0.1, get_screen_height() * 0.9, 100.0, 40.0);
         
         // Create text elements
         let subtitle_text = Text::new(graphics::TextFragment::new("Thanks for Reviewing, John!").scale(SUBTITLE_SCALE));
@@ -279,14 +279,14 @@ impl EventHandler for MainMenu {
             MenuScreen::Main => {
                 // Rainbow title
                 let title = "WIPSHMUP";
-                let mut x_cursor = SCREEN_WIDTH * 0.5 - (TITLE_SCALE * 0.5 * title.len() as f32 * 0.6);
+                let mut x_cursor = get_screen_width() * 0.5 - (TITLE_SCALE * 0.5 * title.len() as f32 * 0.6);
                 for (i, ch) in title.chars().enumerate() {
                     let glyph = Text::new(graphics::TextFragment::new(ch.to_string()).scale(TITLE_SCALE));
                     let hue = (self.time * 180.0 + i as f32 * 30.0) % 360.0;
                     canvas.draw(
                         &glyph,
                         DrawParam::default()
-                            .dest(Vec2::new(x_cursor, SCREEN_HEIGHT * 0.15))
+                            .dest(Vec2::new(x_cursor, get_screen_height() * 0.15))
                             .color(Self::hsv(hue, 1.0, 1.0)),
                     );
                     x_cursor += TITLE_SCALE * 0.6;
@@ -296,7 +296,7 @@ impl EventHandler for MainMenu {
                 canvas.draw(
                     &self.subtitle_text,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH * 0.5 - self.subtitle_text.dimensions(ctx).unwrap().w as f32 / 2.0, SCREEN_HEIGHT * 0.25))
+                        .dest(Vec2::new(get_screen_width() * 0.5 - self.subtitle_text.dimensions(ctx).unwrap().w as f32 / 2.0, get_screen_height() * 0.25))
                         .color(Color::from_rgb(255, 208, 0)),
                 );
 
@@ -314,7 +314,7 @@ impl EventHandler for MainMenu {
                 canvas.draw(
                     &title,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH * 0.5 - title.dimensions(ctx).unwrap().w as f32 / 2.0, 50.0))
+                        .dest(Vec2::new(get_screen_width() * 0.5 - title.dimensions(ctx).unwrap().w as f32 / 2.0, 50.0))
                         .color(Color::YELLOW),
                 );
                 
@@ -324,7 +324,7 @@ impl EventHandler for MainMenu {
                     canvas.draw(
                         stat_text,
                         DrawParam::default()
-                            .dest(Vec2::new(SCREEN_WIDTH * 0.5 - stat_text.dimensions(ctx).unwrap().w as f32 / 2.0, y_offset))
+                            .dest(Vec2::new(get_screen_width() * 0.5 - stat_text.dimensions(ctx).unwrap().w as f32 / 2.0, y_offset))
                             .color(Color::WHITE),
                     );
                     y_offset += 30.0;
@@ -340,7 +340,7 @@ impl EventHandler for MainMenu {
                 canvas.draw(
                     &title,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH * 0.5 - title.dimensions(ctx).unwrap().w as f32 / 2.0, 50.0))
+                        .dest(Vec2::new(get_screen_width() * 0.5 - title.dimensions(ctx).unwrap().w as f32 / 2.0, 50.0))
                         .color(Color::YELLOW),
                 );
                 
@@ -350,7 +350,7 @@ impl EventHandler for MainMenu {
                     canvas.draw(
                         control_text,
                         DrawParam::default()
-                            .dest(Vec2::new(SCREEN_WIDTH * 0.5 - control_text.dimensions(ctx).unwrap().w as f32 / 2.0, y_offset))
+                            .dest(Vec2::new(get_screen_width() * 0.5 - control_text.dimensions(ctx).unwrap().w as f32 / 2.0, y_offset))
                             .color(Color::WHITE),
                     );
                     y_offset += 30.0;
@@ -366,7 +366,7 @@ impl EventHandler for MainMenu {
                 canvas.draw(
                     &title,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH * 0.5 - title.dimensions(ctx).unwrap().w as f32 / 2.0, 50.0))
+                        .dest(Vec2::new(get_screen_width() * 0.5 - title.dimensions(ctx).unwrap().w as f32 / 2.0, 50.0))
                         .color(Color::YELLOW),
                 );
                 
@@ -376,7 +376,7 @@ impl EventHandler for MainMenu {
                     canvas.draw(
                         about_text,
                         DrawParam::default()
-                            .dest(Vec2::new(SCREEN_WIDTH * 0.5 - about_text.dimensions(ctx).unwrap().w as f32 / 2.0, y_offset))
+                            .dest(Vec2::new(get_screen_width() * 0.5 - about_text.dimensions(ctx).unwrap().w as f32 / 2.0, y_offset))
                             .color(Color::WHITE),
                     );
                     y_offset += 22.0; // Reduced spacing for smaller text

@@ -1,4 +1,5 @@
 use ggez::{glam::Vec2, graphics::{self, Color, DrawMode, DrawParam, Mesh, Rect}};
+use crate::constants::get_scaling;
 
 #[derive(Clone, Debug)]
 pub struct Bullet {
@@ -10,10 +11,11 @@ pub struct Bullet {
 
 impl Bullet {
     pub fn new(position: Vec2, velocity: Vec2, size: f32) -> Self {
+        let scaling = get_scaling();
         Self {
             position,
-            velocity,
-            size,
+            velocity: Vec2::new(velocity.x, scaling.scale_speed(velocity.y)),
+            size: scaling.scale_size(size),
             active: true,
         }
     }

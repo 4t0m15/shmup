@@ -35,16 +35,16 @@ pub struct Enemy {
 
 impl Enemy {
     pub fn new(position: Vec2, velocity: Vec2, size: f32, enemy_type: EnemyType) -> Self {
-        let mut rng = rand::thread_rng();
+        let scaling = get_scaling();
         Self {
             position,
-            velocity,
-            size,
+            velocity: Vec2::new(velocity.x, scaling.scale_speed(velocity.y)),
+            size: scaling.scale_size(size),
             active: true,
             enemy_type,
             zenith_state: ZenithState::Idle,
-            zenith_timer: rng.gen_range(2.0..4.0), // Random idle time
-            zenith_direction: rng.gen_range(-1.0..1.0),
+            zenith_timer: 0.0,
+            zenith_direction: 0.0,
             zenith_beam_active: false,
             zenith_beam_target: None,
         }
@@ -125,7 +125,7 @@ impl Enemy {
             self.position.x - ZENITH_BEAM_WIDTH / 2.0,
             self.position.y,
             ZENITH_BEAM_WIDTH,
-            SCREEN_HEIGHT - self.position.y,
+            get_screen_height() - self.position.y,
         )
     }
 
@@ -134,12 +134,15 @@ impl Enemy {
             return Ok(());
         }
 
-        let (color, size) = match self.enemy_type {
-            EnemyType::Normal => (Color::RED, ENEMY_SIZE),
-            EnemyType::Fast => (Color::GREEN, FAST_ENEMY_SIZE),
-            EnemyType::Big => (Color::MAGENTA, BIG_ENEMY_SIZE),
-            EnemyType::Zenith => (Color::WHITE, ZENITH_SIZE), // White Zenith
+        let color = match self.enemy_type {
+            EnemyType::Normal => Color::RED,
+            EnemyType::Fast => Color::GREEN,
+            EnemyType::Big => Color::MAGENTA,
+            EnemyType::Zenith => Color::WHITE, // White Zenith
         };
+        
+        // Use the actual scaled size stored in self.size
+        let size = self.size;
         
         // Enemy glow
         let glow_mesh = Mesh::new_circle(
@@ -193,7 +196,7 @@ impl Enemy {
                     self.position.x - ZENITH_BEAM_WIDTH / 2.0,
                     self.position.y,
                     ZENITH_BEAM_WIDTH,
-                    SCREEN_HEIGHT - self.position.y,
+                    get_screen_height() - self.position.y,
                 );
                 let warning_mesh = Mesh::new_rectangle(
                     ctx,
@@ -225,7 +228,7 @@ impl Enemy {
                     self.position.x - ZENITH_BEAM_WIDTH / 2.0,
                     self.position.y,
                     ZENITH_BEAM_WIDTH,
-                    SCREEN_HEIGHT - self.position.y,
+                    get_screen_height() - self.position.y,
                 );
                 let beam_mesh = Mesh::new_rectangle(
                     ctx,
@@ -241,7 +244,7 @@ impl Enemy {
                     self.position.x - ZENITH_BEAM_WIDTH,
                     self.position.y,
                     ZENITH_BEAM_WIDTH * 2.0,
-                    SCREEN_HEIGHT - self.position.y,
+                    get_screen_height() - self.position.y,
                 );
                 let glow_mesh = Mesh::new_rectangle(
                     ctx,

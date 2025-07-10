@@ -16,6 +16,7 @@ use crate::entities::*;
 use crate::effects::*;
 use crate::weapons::*;
 use ggez::graphics::Drawable;
+use crate::constants::{/* ... existing imports ... */ AGGRESSIVENESS};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameStats {
@@ -153,7 +154,7 @@ pub struct GameState {
     pub game_over_delay_timer: f32, // Timer for delay before showing game over screen
     pub play_time: f32, // Track total play time for this session
     pub stats: GameStats, // Game statistics
-    pub roboto_font: ggez::graphics::FontData,
+    pub combo_flame_particles: Vec<crate::effects::particle::Particle>, // Flame particles for SSSS rank
 }
 
 impl GameState {
@@ -197,8 +198,8 @@ impl GameState {
         
         let mut background_particles = Vec::new();
         for _ in 0..50 {
-            let x = rng.gen_range(0.0..SCREEN_WIDTH);
-            let y = rng.gen_range(0.0..SCREEN_HEIGHT);
+            let x = rng.gen_range(0.0..get_screen_width());
+            let y = rng.gen_range(0.0..get_screen_height());
             let velocity = Vec2::new(rng.gen_range(-10.0..10.0), rng.gen_range(-10.0..10.0));
             let color = Color::new(0.1, 0.1, 0.3, 0.3);
             background_particles.push(Particle::new(
@@ -210,10 +211,12 @@ impl GameState {
             ));
         }
         
-        let roboto_font = ggez::graphics::FontData::from_path(ctx, "/fonts/Roboto-VariableFont_wdth,wght.ttf").expect("Failed to load Roboto font");
+        // Get scaling for player position
+        let scaling = get_scaling();
+        let (player_x, player_y) = scaling.scale_position(get_screen_width() / 2.0, get_screen_height() - 50.0);
         
         Self {
-            player: Player::new(Vec2::new(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT - 50.0)),
+            player: Player::new(Vec2::new(player_x, player_y)),
             bullets: Vec::new(),
             enemies: Vec::new(),
             boss: None,
@@ -256,7 +259,7 @@ impl GameState {
             game_over_delay_timer: 0.0,
             play_time: 0.0,
             stats: GameStats::load(),
-            roboto_font,
+            combo_flame_particles: Vec::new(),
         }
     }
 
@@ -305,18 +308,23 @@ impl GameState {
         self.screen_shake = 0.8; // Even more massive screen shake
     }
 
-    pub fn create_combo_text_effect(&mut self, position: Vec2) {
-        let combo_text = format!("{}x{}!", self.combo_counter, self.combo_multiplier);
+    pub fn create_combo_text_effect(&mut self, position: Vec2, score: u32) {
+        let combo_text = format!("{}", score);
         let combo_text_effect = ComboText::new(position, combo_text);
         self.combo_texts.push(combo_text_effect);
     }
 
     pub fn spawn_enemy(&mut self) {
         let mut rng = rand::thread_rng();
-        let x = rng.gen_range(ENEMY_SIZE..(SCREEN_WIDTH - ENEMY_SIZE));
+        let scaling = get_scaling();
         
-        // Check for Zenith spawn (3% chance)
-        let enemy_type = if rng.gen::<f32>() < ZENITH_SPAWN_CHANCE {
+        // Use scaled enemy size for spawn position calculation
+        let scaled_enemy_size = scaling.scale_size(ENEMY_SIZE);
+        let x = rng.gen_range(scaled_enemy_size..(get_screen_width() - scaled_enemy_size));
+        
+        // Check for Zenith spawn (scale with AGGRESSIVENESS, up to 20%)
+        let zenith_chance = (0.03 * AGGRESSIVENESS).min(0.2);
+        let enemy_type = if rng.gen::<f32>() < zenith_chance {
             EnemyType::Zenith
         } else {
             match rng.gen_range(0..10) {
@@ -332,8 +340,11 @@ impl GameState {
             EnemyType::Big => (BIG_ENEMY_SIZE, Vec2::new(0.0, BIG_ENEMY_SPEED)),
             EnemyType::Zenith => (ZENITH_SIZE, Vec2::new(0.0, ZENITH_SPEED)),
         };
+        
+        // Use scaled size for spawn position
+        let scaled_size = scaling.scale_size(size);
         let enemy = Enemy::new(
-            Vec2::new(x, -size),
+            Vec2::new(x, -scaled_size),
             velocity,
             size,
             enemy_type,
@@ -343,7 +354,7 @@ impl GameState {
 
     pub fn spawn_power_up(&mut self) {
         let mut rng = rand::thread_rng();
-        let x = rng.gen_range(50.0..(SCREEN_WIDTH - 50.0));
+        let x = rng.gen_range(50.0..(get_screen_width() - 50.0));
         let power_type = match rng.gen_range(0..4) { // Changed to 4 for Laser
             0 => PowerUpType::RapidFire,
             1 => PowerUpType::TripleShot,
@@ -425,10 +436,8 @@ impl GameState {
                     self.explosions.push(Explosion::new(enemy.position));
                     self.screen_shake = 0.1; // Add screen shake
                     
-                    // Store combo effect position
-                    if self.combo_counter > 1 {
-                        combo_effects.push(enemy.position);
-                    }
+                    // Store combo effect position and score
+                    combo_effects.push((enemy.position, combo_score));
                     // Update kill counters
                     match enemy.enemy_type {
                         EnemyType::Normal => self.normal_enemies_killed += 1,
@@ -527,10 +536,8 @@ impl GameState {
                     self.explosions.push(Explosion::new(enemy.position));
                     self.screen_shake = 0.1;
                     
-                    // Store combo effect position
-                    if self.combo_counter > 1 {
-                        combo_effects.push(enemy.position);
-                    }
+                    // Store combo effect position and score
+                    combo_effects.push((enemy.position, combo_score));
                     // Update kill counters
                     match enemy.enemy_type {
                         EnemyType::Normal => self.normal_enemies_killed += 1,
@@ -593,11 +600,13 @@ impl GameState {
             for (i, enemy) in self.enemies.iter_mut().enumerate() {
                 if enemy.enemy_type == EnemyType::Zenith && enemy.is_zenith_beam_active() {
                     let beam_rect = enemy.get_zenith_beam_bounds();
+                    let scaling = get_scaling();
+                    let scaled_player_size = scaling.scale_size(PLAYER_SIZE);
                     let player_rect = Rect::new(
-                        self.player.position.x - PLAYER_SIZE / 2.0,
-                        self.player.position.y - PLAYER_SIZE / 2.0,
-                        PLAYER_SIZE,
-                        PLAYER_SIZE,
+                        self.player.position.x - scaled_player_size / 2.0,
+                        self.player.position.y - scaled_player_size / 2.0,
+                        scaled_player_size,
+                        scaled_player_size,
                     );
                     if beam_rect.overlaps(&player_rect) {
                         self.grabbed_by_zenith = Some(i);
@@ -619,8 +628,8 @@ impl GameState {
             }
             self.enemies[enemy_idx].active = false;
         }
-        for position in combo_effects {
-            self.create_combo_text_effect(position);
+        for (position, score) in combo_effects {
+            self.create_combo_text_effect(position, score);
         }
 
         // Check player-powerup collisions
@@ -661,7 +670,7 @@ impl GameState {
             if player_hit {
                 if self.lives > 1 {
                     self.lives -= 1;
-                    self.player.position = Vec2::new(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT - 50.0);
+                    self.player.position = Vec2::new(get_screen_width() / 2.0, get_screen_height() - 50.0);
                     self.player.velocity = Vec2::ZERO;
                     self.invincible_timer = 1.0; // 1 second invincibility
                     self.screen_shake = 0.2; // Strong screen shake
@@ -819,8 +828,8 @@ impl EventHandler for GameState {
             if particle.is_dead() {
                 let mut rng = rand::thread_rng();
                 particle.position = Vec2::new(
-                    rng.gen_range(0.0..SCREEN_WIDTH),
-                    rng.gen_range(0.0..SCREEN_HEIGHT),
+                    rng.gen_range(0.0..get_screen_width()),
+                    rng.gen_range(0.0..get_screen_height()),
                 );
                 particle.life = rng.gen_range(2.0..5.0);
             }
@@ -877,20 +886,24 @@ impl EventHandler for GameState {
         self.player.update(dt);
 
         // Keep player in bounds
+        let scaling = get_scaling();
+        let scaled_player_size = scaling.scale_size(PLAYER_SIZE);
         self.player.position.x = self.player.position.x.clamp(
-            PLAYER_SIZE / 2.0,
-            SCREEN_WIDTH - PLAYER_SIZE / 2.0,
+            scaled_player_size / 2.0,
+            get_screen_width() - scaled_player_size / 2.0,
         );
         self.player.position.y = self.player.position.y.clamp(
-            PLAYER_SIZE / 2.0,
-            SCREEN_HEIGHT - PLAYER_SIZE / 2.0,
+            scaled_player_size / 2.0,
+            get_screen_height() - scaled_player_size / 2.0,
         );
 
         // Update bullets
         for bullet in &mut self.bullets {
             bullet.update(dt);
             // Remove bullets that go off screen
-            if bullet.position.y < -BULLET_SIZE {
+            let scaling = get_scaling();
+            let scaled_bullet_size = scaling.scale_size(BULLET_SIZE);
+            if bullet.position.y < -scaled_bullet_size {
                 bullet.active = false;
             }
         }
@@ -899,7 +912,7 @@ impl EventHandler for GameState {
         for enemy in &mut self.enemies {
             enemy.update(dt);
             // Remove enemies that go off screen
-            if enemy.position.y > SCREEN_HEIGHT + enemy.size {
+            if enemy.position.y > get_screen_height() + enemy.size {
                 enemy.active = false;
             }
         }
@@ -932,24 +945,29 @@ impl EventHandler for GameState {
             self.laser = Laser::new();
         }
 
-        // Spawn enemies
+        // Spawn enemies - AGGRESSIVENESS controls frequency and count
         self.enemy_spawn_timer += dt;
-        if self.enemy_spawn_timer >= 0.7 {
-            for _ in 0..5 {
+        if self.enemy_spawn_timer >= 0.7 / AGGRESSIVENESS {
+            let base_enemies = 5.0 * AGGRESSIVENESS;
+            let base_area = 1920.0 * 1080.0;
+            let screen_area = crate::constants::get_screen_width() * crate::constants::get_screen_height();
+            let scale = screen_area / base_area;
+            let num_enemies = (base_enemies * scale * AGGRESSIVENESS).ceil() as usize;
+            for _ in 0..num_enemies {
                 self.spawn_enemy();
             }
             self.enemy_spawn_timer = 0.0;
         }
 
-        // Spawn power-ups
+        // Spawn power-ups - scale with AGGRESSIVENESS (more frequent if higher)
         self.power_up_spawn_timer += dt;
-        if self.power_up_spawn_timer >= 8.0 {
+        if self.power_up_spawn_timer >= 8.0 / AGGRESSIVENESS {
             self.spawn_power_up();
             self.power_up_spawn_timer = 0.0;
         }
 
-        // Check for boss spawning (every 10,000 points)
-        if self.score >= self.boss_spawn_score + 10000 && self.boss.is_none() {
+        // Check for boss spawning (scale with AGGRESSIVENESS)
+        if self.score >= self.boss_spawn_score + (10000.0 / AGGRESSIVENESS) as u32 && self.boss.is_none() {
             self.spawn_boss();
             self.boss_spawn_score = self.score;
         }
@@ -958,11 +976,11 @@ impl EventHandler for GameState {
         if let Some(boss) = &mut self.boss {
             boss.update(dt);
             
-            // Spawn boss bullets based on attack patterns
+            // Spawn boss bullets based on attack patterns - scale with AGGRESSIVENESS
             let attack_interval = match boss.boss_type {
-                BossType::Destroyer => if boss.phase == 1 { 0.8 } else { 0.5 },
-                BossType::Carrier => if boss.phase == 1 { 1.2 } else { 0.8 },
-                BossType::Behemoth => if boss.phase == 1 { 1.0 } else { 0.6 },
+                BossType::Destroyer => if boss.phase == 1 { 0.8 / AGGRESSIVENESS } else { 0.5 / AGGRESSIVENESS },
+                BossType::Carrier => if boss.phase == 1 { 1.2 / AGGRESSIVENESS } else { 0.8 / AGGRESSIVENESS },
+                BossType::Behemoth => if boss.phase == 1 { 1.0 / AGGRESSIVENESS } else { 0.6 / AGGRESSIVENESS },
             };
             
             if boss.attack_timer >= attack_interval {
@@ -1013,9 +1031,9 @@ impl EventHandler for GameState {
         for boss_bullet in &mut self.boss_bullets {
             boss_bullet.update(dt);
             // Remove boss bullets that go off screen
-            if boss_bullet.position.y > SCREEN_HEIGHT + boss_bullet.size || 
+            if boss_bullet.position.y > get_screen_height() + boss_bullet.size || 
             boss_bullet.position.x < -boss_bullet.size || 
-            boss_bullet.position.x > SCREEN_WIDTH + boss_bullet.size {
+            boss_bullet.position.x > get_screen_width() + boss_bullet.size {
                 boss_bullet.active = false;
             }
         }
@@ -1028,15 +1046,17 @@ impl EventHandler for GameState {
             if let Some(zenith) = self.enemies.get(zenith_idx) {
                 if zenith.enemy_type == EnemyType::Zenith && zenith.is_zenith_beam_active() {
                     // Lerp player toward Zenith's y
-                    let target = Vec2::new(zenith.position.x, zenith.position.y + ZENITH_SIZE / 2.0 + PLAYER_SIZE / 2.0);
+                    let scaling = get_scaling();
+                    let scaled_player_size = scaling.scale_size(PLAYER_SIZE);
+                    let target = Vec2::new(zenith.position.x, zenith.position.y + zenith.size / 2.0 + scaled_player_size / 2.0);
                     let dir = (target - self.player.position).normalize_or_zero();
                     self.player.velocity = dir * ZENITH_BEAM_SPEED;
                     self.player.position += self.player.velocity * dt;
                     // If player reaches Zenith or top, lose a life
-                    if (self.player.position.y <= zenith.position.y + ZENITH_SIZE / 2.0) || (self.player.position.y < 0.0) {
+                    if (self.player.position.y <= zenith.position.y + zenith.size / 2.0) || (self.player.position.y < 0.0) {
                         if self.lives > 1 {
                             self.lives -= 1;
-                            self.player.position = Vec2::new(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT - 50.0);
+                            self.player.position = Vec2::new(get_screen_width() / 2.0, get_screen_height() - 50.0);
                             self.player.velocity = Vec2::ZERO;
                             self.invincible_timer = 1.0;
                             self.screen_shake = 0.2;
@@ -1053,6 +1073,60 @@ impl EventHandler for GameState {
             } else {
                 self.grabbed_by_zenith = None;
             }
+        }
+
+        // Update combo flame particles for SSSS+ ranks
+        let s_count = if self.combo_counter >= 40 && self.combo_counter < 90 {
+            // Count the number of S's in the rank string
+            let rank = if self.combo_counter > 0 {
+                match self.combo_counter {
+                    90..=u32::MAX => "SSSSSSSSS",
+                    80..=89 => "SSSSSSSS",
+                    70..=79 => "SSSSSSS",
+                    60..=69 => "SSSSSS",
+                    50..=59 => "SSSSS",
+                    40..=49 => "SSSS",
+                    _ => "",
+                }
+            } else { "" };
+            rank.matches('S').count().max(4) // At least 4 for SSSS
+        } else { 0 };
+        if s_count > 0 {
+            // Spawn new flame particles if not too many
+            let max_particles = 10 * s_count;
+            if self.combo_flame_particles.len() < max_particles {
+                let mut rng = rand::thread_rng();
+                for _ in 0..s_count {
+                    let angle = rng.gen_range(-0.7..0.7);
+                    let speed = rng.gen_range(20.0..60.0);
+                    let velocity = ggez::glam::Vec2::new((angle as f32).cos() * speed, (angle as f32).sin() * speed - 10.0);
+                    let life = rng.gen_range(0.4..0.8);
+                    let color = match rng.gen_range(0..3) {
+                        0 => ggez::graphics::Color::new(1.0, 0.8, 0.2, 1.0), // Yellow
+                        1 => ggez::graphics::Color::new(1.0, 0.4, 0.0, 1.0), // Orange
+                        _ => ggez::graphics::Color::new(1.0, 0.2, 0.0, 1.0), // Red
+                    };
+                    let size = rng.gen_range(3.0..8.0);
+                    // Centered behind the SSSS text
+                    let pos = ggez::glam::Vec2::new(
+                        rng.gen_range(-10.0..10.0),
+                        rng.gen_range(-5.0..5.0),
+                    );
+                    self.combo_flame_particles.push(crate::effects::particle::Particle::new(pos, velocity, life, color, size));
+                }
+            }
+            // Update and retain alive particles
+            for p in &mut self.combo_flame_particles {
+                p.update(dt);
+            }
+            self.combo_flame_particles.retain(|p| !p.is_dead());
+        } else {
+            self.combo_flame_particles.clear();
+        }
+
+        // Apply strong screen shake for 9S rank
+        if self.combo_counter >= 150 {
+            self.screen_shake = 0.8;
         }
 
         Ok(())
@@ -1108,7 +1182,7 @@ impl EventHandler for GameState {
 
         // Draw lives as hearts (top right)
         for i in 0..self.lives {
-            let heart_x = SCREEN_WIDTH - 20.0 - (self.lives - 1 - i) as f32 * 30.0;
+            let heart_x = crate::constants::get_screen_width() - 20.0 - (self.lives - 1 - i) as f32 * 30.0;
             let heart_y = 40.0;
             let heart_mesh = Mesh::new_circle(
                 ctx,
@@ -1136,7 +1210,7 @@ impl EventHandler for GameState {
             let high_score_text = Text::new(graphics::TextFragment::new(format!("High Score: {}", self.high_score)).scale(20.0));
             let restart_text = Text::new(graphics::TextFragment::new("Press R to restart or ESC for menu").scale(20.0));
 
-            let center_x = SCREEN_WIDTH / 2.0;
+            let center_x = crate::constants::get_screen_width() / 2.0;
             let mut y = 60.0;
             // Score
             canvas.draw(
@@ -1400,7 +1474,7 @@ impl EventHandler for GameState {
                 canvas.draw(
                     &boss_warning,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 80.0, 80.0) + shake_offset)
+                        .dest(Vec2::new(crate::constants::get_screen_width() / 2.0 - 80.0, 80.0) + shake_offset)
                         .color(warning_color),
                 );
             }
@@ -1423,7 +1497,7 @@ impl EventHandler for GameState {
                 canvas.draw(
                     &laser_title,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 150.0, 80.0) + shake_offset)
+                        .dest(Vec2::new(crate::constants::get_screen_width() / 2.0 - 150.0, 80.0) + shake_offset)
                         .color(laser_color),
                 );
                 
@@ -1431,21 +1505,21 @@ impl EventHandler for GameState {
                 canvas.draw(
                     &laser_instruction1,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 120.0, 110.0) + shake_offset)
+                        .dest(Vec2::new(crate::constants::get_screen_width() / 2.0 - 120.0, 110.0) + shake_offset)
                         .color(Color::WHITE),
                 );
                 
                 canvas.draw(
                     &laser_instruction2,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 100.0, 130.0) + shake_offset)
+                        .dest(Vec2::new(crate::constants::get_screen_width() / 2.0 - 100.0, 130.0) + shake_offset)
                         .color(Color::WHITE),
                 );
                 
                 canvas.draw(
                     &laser_tip,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 120.0, 150.0) + shake_offset)
+                        .dest(Vec2::new(crate::constants::get_screen_width() / 2.0 - 120.0, 150.0) + shake_offset)
                         .color(Color::new(1.0, 0.8, 0.0, 1.0)),
                 );
             }
@@ -1484,15 +1558,15 @@ impl EventHandler for GameState {
                 canvas.draw(
                     &charge_text,
                     DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 100.0, SCREEN_HEIGHT - 80.0) + shake_offset)
+                        .dest(Vec2::new(crate::constants::get_screen_width() / 2.0 - 100.0, crate::constants::get_screen_height() - 80.0) + shake_offset)
                         .color(charge_color),
                 );
                 
                 // Draw charge bar
                 let bar_width = 200.0;
                 let bar_height = 10.0;
-                let bar_x = SCREEN_WIDTH / 2.0 - bar_width / 2.0;
-                let bar_y = SCREEN_HEIGHT - 60.0;
+                let bar_x = crate::constants::get_screen_width() / 2.0 - bar_width / 2.0;
+                let bar_y = crate::constants::get_screen_height() - 60.0;
                 
                 // Background bar
                 let bg_bar = Mesh::new_rectangle(
@@ -1576,153 +1650,176 @@ impl GameState {
     fn draw_combo_panel(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) -> GameResult {
         use ggez::graphics::{Color, DrawMode, DrawParam, Mesh, Rect, Text, TextFragment};
         use ggez::glam::Vec2;
-        // Panel dimensions and position
-        let panel_w = 220.0;
-        let panel_h = 320.0;
-        let panel_x = 20.0;
-        let panel_y = 20.0;
-        let border_thick = 2.0;
-        let rule_thin = 1.0;
-        // Subdivision
-        let v_split = panel_x + panel_w * 0.55;
-        let h_split = panel_y + panel_h * 0.5;
-        // Draw outer frame
-        let frame = Mesh::new_rectangle(
-            ctx,
-            DrawMode::stroke(border_thick),
-            Rect::new(panel_x, panel_y, panel_w, panel_h),
-            Color::BLACK,
-        )?;
-        canvas.draw(&frame, DrawParam::default());
-        // Draw vertical rule
-        let vline = Mesh::new_rectangle(
-            ctx,
-            DrawMode::fill(),
-            Rect::new(v_split - rule_thin/2.0, panel_y, rule_thin, panel_h),
-            Color::BLACK,
-        )?;
-        canvas.draw(&vline, DrawParam::default());
-        // Draw horizontal rule
-        let hline = Mesh::new_rectangle(
-            ctx,
-            DrawMode::fill(),
-            Rect::new(panel_x, h_split - rule_thin/2.0, panel_w, rule_thin),
-            Color::BLACK,
-        )?;
-        canvas.draw(&hline, DrawParam::default());
-        // --- Upper-Left Panel: empty (reserved)
-        let ul_rect = Rect::new(panel_x, panel_y, v_split - panel_x, h_split - panel_y);
-        let ul_bg = Mesh::new_rectangle(ctx, DrawMode::fill(), ul_rect, Color::WHITE)?;
-        canvas.draw(&ul_bg, DrawParam::default());
-        // --- Upper-Right Panel: Time display
-        let ur_x = v_split;
-        let ur_y = panel_y;
-        let ur_w = panel_x + panel_w - v_split;
-        let ur_h = h_split - panel_y;
-        // Time text
-        let time_val = if self.combo_timer > 0.0 {
-            format!("{:.1} s", self.combo_timer)
-        } else {
-            "0.0 s".to_string()
-        };
-        let mut time_text = Text::new(TextFragment::new(time_val).scale(48.0).font(self.roboto_font));
-        let time_dim = time_text.dimensions(ctx).unwrap_or_default();
-        let time_x = ur_x + ur_w - time_dim.w as f32 - 10.0;
-        canvas.draw(
-            &time_text,
-            DrawParam::default().dest(Vec2::new(time_x, ur_y + 10.0)).color(Color::BLACK),
-        );
-        // Progress bar
-        let bar_margin = 10.0;
-        let bar_w = ur_w - 2.0 * bar_margin;
-        let bar_h = ur_h / 8.0;
-        let bar_x = ur_x + bar_margin;
-        let bar_y = ur_y + 70.0;
-        let max_time = crate::constants::COMBO_TIMEOUT;
-        let frac = (self.combo_timer / max_time).clamp(0.0, 1.0);
-        let filled_w = bar_w * frac;
-        // Red filled part
-        let bar_fill = Mesh::new_rectangle(
-            ctx,
-            DrawMode::fill(),
-            Rect::new(bar_x, bar_y, filled_w, bar_h),
-            Color::from_rgb(226, 33, 33),
-        )?;
-        canvas.draw(&bar_fill, DrawParam::default());
-        // White unfilled part
-        let bar_empty = Mesh::new_rectangle(
-            ctx,
-            DrawMode::fill(),
-            Rect::new(bar_x + filled_w, bar_y, bar_w - filled_w, bar_h),
-            Color::WHITE,
-        )?;
-        canvas.draw(&bar_empty, DrawParam::default());
-        // 'remaining' label (centered)
-        let mut rem_text = Text::new(TextFragment::new("remaining").scale(20.0).font(self.roboto_font));
-        let rem_dim = rem_text.dimensions(ctx).unwrap_or_default();
-        let rem_x = ur_x + (ur_w - rem_dim.w as f32) / 2.0;
-        canvas.draw(
-            &rem_text,
-            DrawParam::default().dest(Vec2::new(rem_x, bar_y + bar_h + 2.0)).color(Color::from_rgb(111, 111, 111)),
-        );
-        // --- Lower-Left Panel: Rank
-        let ll_x = panel_x;
-        let ll_y = h_split;
-        let ll_w = v_split - panel_x;
-        let ll_h = panel_y + panel_h - h_split;
+        // Panel position (bottom right)
+        let panel_w = 420.0; // Increased width for 9 S's and long timer bar
+        let panel_h = 70.0;
+        let margin = 20.0;
+        let panel_x = crate::constants::get_screen_width() - panel_w - margin;
+        let panel_y = crate::constants::get_screen_height() - panel_h - margin;
+
+        // --- Rank/Label (e.g. "SSS" or "DESTRUCTIVE") ---
         let rank = if self.combo_counter > 0 {
             match self.combo_counter {
-                20..=u32::MAX => "SSS",
-                15..=19 => "SS",
-                10..=14 => "S",
-                7..=9 => "A",
-                5..=6 => "B",
-                3..=4 => "C",
-                1..=2 => "D",
+                150..=u32::MAX => "SSSSSSSSS",
+                80..=149 => "SSSSSSSS",
+                70..=79 => "SSSSSSS",
+                60..=69 => "SSSSSS",
+                50..=59 => "SSSSS",
+                40..=49 => "SSSS",
+                30..=39 => "SSS",
+                20..=29 => "SS",
+                15..=19 => "S",
+                10..=14 => "A",
+                7..=9 => "B",
+                5..=6 => "C",
+                3..=4 => "D",
+                1..=2 => "E",
                 _ => "",
             }
         } else {
             ""
         };
-        let mut rank_text = Text::new(TextFragment::new(rank).scale(60.0).font(self.roboto_font));
-        let rank_y = ll_y + ll_h/2.0 - 40.0;
+        // Color order for S's: Blue, Green, Yellow, Orange, Red, Gold
+        let s_colors = [
+            Color::from_rgb(0, 120, 255),   // Blue
+            Color::from_rgb(0, 200, 70),    // Green
+            Color::from_rgb(255, 220, 0),   // Yellow
+            Color::from_rgb(255, 140, 0),   // Orange
+            Color::from_rgb(226, 33, 33),   // Red
+            Color::from_rgb(255, 215, 0),   // Gold
+        ];
+        // Determine S count for color
+        let s_count = rank.matches('S').count();
+        let s_color = if s_count == 0 {
+            Color::from_rgb(226, 33, 33)
+        } else if s_count <= 5 {
+            s_colors[s_count - 1]
+        } else if s_count < 9 {
+            s_colors[5]
+        } else {
+            Color::WHITE
+        };
+        // Draw flame particles behind SSSS+ ranks
+        if rank.starts_with("SSSS") && rank != "SSSSSSSSS" {
+            for particle in &self.combo_flame_particles {
+                if !particle.is_dead() {
+                    let color = Color::new(
+                        particle.color.r,
+                        particle.color.g,
+                        particle.color.b,
+                        particle.get_alpha(),
+                    );
+                    let mesh = Mesh::new_circle(
+                        ctx,
+                        DrawMode::fill(),
+                        Vec2::new(panel_x + 50.0, panel_y + 30.0) + particle.position,
+                        particle.size,
+                        0.1,
+                        color,
+                    )?;
+                    canvas.draw(&mesh, DrawParam::default());
+                }
+            }
+        }
+        // Draw the rank (or label)
+        let rank_frag = TextFragment::new(rank)
+            .scale(44.0)
+            .color(s_color);
+        let rank_text = Text::new(rank_frag);
+        let rank_x = panel_x + 10.0;
+        let rank_y = panel_y + 2.0;
+        // Shake effect for 9S rank
+        let mut shake_offset = Vec2::ZERO;
+        if rank == "SSSSSSSSS" {
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            shake_offset = Vec2::new(rng.gen_range(-6.0..6.0), rng.gen_range(-6.0..6.0));
+            for i in 0..8 {
+                let angle = (i as f32) * std::f32::consts::PI * 2.0 / 8.0;
+                let offset = (2.0 * angle.cos(), 2.0 * angle.sin());
+                let glow_frag = TextFragment::new(rank)
+                    .scale(44.0)
+                    .color(Color::new(1.0, 1.0, 1.0, 0.15));
+                let glow_text = Text::new(glow_frag);
+                canvas.draw(
+                    &glow_text,
+                    DrawParam::default().dest(Vec2::new(rank_x + offset.0, rank_y + offset.1) + shake_offset),
+                );
+            }
+        }
         canvas.draw(
             &rank_text,
-            DrawParam::default().dest(Vec2::new(ll_x + 10.0, rank_y)).color(Color::from_rgb(226, 33, 33)),
+            DrawParam::default().dest(Vec2::new(rank_x, rank_y) + shake_offset),
         );
-        // --- Lower-Right Panel: Multiplier
-        let lr_x = v_split;
-        let lr_y = h_split;
-        let lr_w = panel_x + panel_w - v_split;
-        let lr_h = panel_y + panel_h - h_split;
-        // 'Mult:' label (left-aligned)
-        let mut mult_label = Text::new(TextFragment::new("Mult:").scale(32.0).font(self.roboto_font));
-        canvas.draw(
-            &mult_label,
-            DrawParam::default().dest(Vec2::new(lr_x + 8.0, lr_y + 10.0)).color(Color::BLACK),
-        );
-        // Multiplier value (centered)
+
+        // --- Multiplier (right-aligned, bold, white) ---
         let mult_val = if self.combo_counter > 0 {
-            format!("{:.1}x", self.combo_multiplier)
+            format!("{:.1}x", self.combo_multiplier.min(50.0))
         } else {
             "0.0x".to_string()
         };
-        let mut mult_text = Text::new(TextFragment::new(mult_val).scale(36.0).font(self.roboto_font));
+        let mult_text = Text::new(TextFragment::new(mult_val).scale(36.0).color(Color::WHITE));
         let mult_dim = mult_text.dimensions(ctx).unwrap_or_default();
-        let mult_x = lr_x + (lr_w - mult_dim.w as f32) / 2.0;
+        let mult_x = panel_x + panel_w - mult_dim.w as f32 - 10.0;
+        let mult_y = panel_y + 8.0;
         canvas.draw(
             &mult_text,
-            DrawParam::default().dest(Vec2::new(mult_x, lr_y + 60.0)).color(Color::BLACK),
+            DrawParam::default().dest(Vec2::new(mult_x, mult_y)),
         );
-        // Underline
-        let underline_y = lr_y + 100.0;
-        let underline = Mesh::new_rectangle(
+
+        // --- Progress Bar (red, with white background) ---
+        let bar_y = panel_y + 50.0;
+        let bar_h = 14.0;
+        let bar_w = panel_w - 20.0; // Now much longer
+        let bar_x = panel_x + 10.0;
+        let max_time = crate::constants::COMBO_TIMEOUT;
+        // Timer decreases faster for higher ranks
+        let time_factor = if self.combo_counter >= 150 {
+            0.25
+        } else if self.combo_counter >= 130 {
+            0.4
+        } else if self.combo_counter >= 110 {
+            0.6
+        } else if self.combo_counter >= 90 {
+            0.8
+        } else {
+            1.0
+        };
+        let frac = ((self.combo_timer / max_time) * time_factor).clamp(0.0, 1.0);
+        let filled_w = bar_w * frac;
+        // Background (white)
+        let bar_bg = Mesh::new_rectangle(
             ctx,
             DrawMode::fill(),
-            Rect::new(lr_x + 10.0, underline_y, lr_w - 20.0, 2.0),
-            Color::BLACK,
+            Rect::new(bar_x, bar_y, bar_w, bar_h),
+            Color::WHITE,
         )?;
-        canvas.draw(&underline, DrawParam::default());
+        canvas.draw(&bar_bg, DrawParam::default());
+        // Filled (red or white for 9S)
+        let bar_color = if rank == "SSSSSSSSS" { Color::WHITE } else { Color::from_rgb(226, 33, 33) };
+        let bar_fill = Mesh::new_rectangle(
+            ctx,
+            DrawMode::fill(),
+            Rect::new(bar_x, bar_y, filled_w, bar_h),
+            bar_color,
+        )?;
+        canvas.draw(&bar_fill, DrawParam::default());
+
+        // --- Time Remaining (small, gray, right-aligned under bar) ---
+        let time_val = if self.combo_timer > 0.0 {
+            format!("{:.1}s", self.combo_timer * time_factor)
+        } else {
+            "0.0s".to_string()
+        };
+        let time_text = Text::new(TextFragment::new(time_val).scale(18.0).color(Color::from_rgb(111, 111, 111)));
+        let time_dim = time_text.dimensions(ctx).unwrap_or_default();
+        let time_x = panel_x + panel_w - time_dim.w as f32 - 10.0;
+        let time_y = bar_y + bar_h + 2.0;
+        canvas.draw(
+            &time_text,
+            DrawParam::default().dest(Vec2::new(time_x, time_y)),
+        );
+
         Ok(())
     }
 } 

@@ -1,4 +1,5 @@
 use ggez::{glam::Vec2, graphics::{self, Color, DrawMode, DrawParam, Mesh, Rect}};
+use crate::constants::{get_scaling, get_screen_height};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PowerUpType {
@@ -19,9 +20,10 @@ pub struct PowerUp {
 
 impl PowerUp {
     pub fn new(position: Vec2, power_type: PowerUpType) -> Self {
+        let scaling = get_scaling();
         Self {
             position,
-            velocity: Vec2::new(0.0, 100.0),
+            velocity: Vec2::new(0.0, scaling.scale_speed(100.0)),
             power_type,
             active: true,
             pulse_timer: 0.0,
@@ -31,7 +33,7 @@ impl PowerUp {
     pub fn update(&mut self, dt: f32) {
         self.position += self.velocity * dt;
         self.pulse_timer += dt * 3.0;
-        if self.position.y > crate::constants::SCREEN_HEIGHT + 20.0 {
+        if self.position.y > get_screen_height() + 20.0 {
             self.active = false;
         }
     }

@@ -11,10 +11,11 @@ pub struct Player {
 
 impl Player {
     pub fn new(position: Vec2) -> Self {
+        let scaling = get_scaling();
         Self {
             position,
             velocity: Vec2::ZERO,
-            size: PLAYER_SIZE,
+            size: scaling.scale_size(PLAYER_SIZE),
             active: true,
         }
     }
