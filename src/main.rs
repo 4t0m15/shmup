@@ -49,8 +49,8 @@ impl event::EventHandler for GameScreen {
                 
                 // Check for menu actions
                 match menu.get_action() {
-                    MenuAction::StartGame => {
-                        *self = GameScreen::Game(GameState::new(ctx));
+                    MenuAction::SetDifficulty(difficulty) => {
+                        *self = GameScreen::Game(GameState::new_with_difficulty(ctx, difficulty));
                     }
                     MenuAction::Quit => {
                         ctx.request_quit();
@@ -75,8 +75,8 @@ impl event::EventHandler for GameScreen {
                 
                 // Check for menu actions after key events
                 match menu.get_action() {
-                    MenuAction::StartGame => {
-                        *self = GameScreen::Game(GameState::new(ctx));
+                    MenuAction::SetDifficulty(difficulty) => {
+                        *self = GameScreen::Game(GameState::new_with_difficulty(ctx, difficulty));
                     }
                     MenuAction::Quit => {
                         ctx.request_quit();

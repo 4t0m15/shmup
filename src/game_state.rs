@@ -16,7 +16,7 @@ use crate::entities::*;
 use crate::effects::*;
 use crate::weapons::*;
 use ggez::graphics::Drawable;
-use crate::constants::{/* ... existing imports ... */ AGGRESSIVENESS};
+use crate::constants::{/* ... existing imports ... */ AGGRESSIVENESS, ENEMY_BASE_AMOUNT};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameStats {
@@ -109,6 +109,49 @@ impl GameStats {
 
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Difficulty {
+    Goober,
+    Standard,
+    UltraViolence,
+    NotWhenHow,
+}
+
+#[derive(Debug)]
+pub struct GameConfig {
+    pub enemy_base_amount: f32,
+    pub enemy_speed: f32,
+    pub aggressiveness: f32,
+    // Add more fields as needed
+}
+
+impl Difficulty {
+    pub fn config(&self) -> GameConfig {
+        match self {
+            Difficulty::Goober => GameConfig {
+                enemy_base_amount: 2.0,
+                enemy_speed: 100.0,
+                aggressiveness: 0.8,
+            },
+            Difficulty::Standard => GameConfig {
+                enemy_base_amount: 3.0,
+                enemy_speed: 150.0,
+                aggressiveness: 1.0,
+            },
+            Difficulty::UltraViolence => GameConfig {
+                enemy_base_amount: 5.0,
+                enemy_speed: 200.0,
+                aggressiveness: 1.5,
+            },
+            Difficulty::NotWhenHow => GameConfig {
+                enemy_base_amount: 8.0,
+                enemy_speed: 300.0,
+                aggressiveness: 2.0,
+            },
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct GameState {
     pub player: Player,
@@ -155,6 +198,8 @@ pub struct GameState {
     pub play_time: f32, // Track total play time for this session
     pub stats: GameStats, // Game statistics
     pub combo_flame_particles: Vec<crate::effects::particle::Particle>, // Flame particles for SSSS rank
+    pub difficulty: Difficulty,
+    pub config: GameConfig,
 }
 
 impl GameState {
@@ -260,6 +305,8 @@ impl GameState {
             play_time: 0.0,
             stats: GameStats::load(),
             combo_flame_particles: Vec::new(),
+            difficulty: Difficulty::Goober,
+            config: Difficulty::Goober.config(),
         }
     }
 
@@ -323,7 +370,7 @@ impl GameState {
         let x = rng.gen_range(scaled_enemy_size..(get_screen_width() - scaled_enemy_size));
         
         // Check for Zenith spawn (scale with AGGRESSIVENESS, up to 20%)
-        let zenith_chance = (0.03 * AGGRESSIVENESS).min(0.2);
+        let zenith_chance = (0.03 * self.config.aggressiveness).min(0.2);
         let enemy_type = if rng.gen::<f32>() < zenith_chance {
             EnemyType::Zenith
         } else {
@@ -335,7 +382,7 @@ impl GameState {
         };
         
         let (size, velocity) = match enemy_type {
-            EnemyType::Normal => (ENEMY_SIZE, Vec2::new(0.0, ENEMY_SPEED)),
+            EnemyType::Normal => (ENEMY_SIZE, Vec2::new(0.0, self.config.enemy_speed)),
             EnemyType::Fast => (FAST_ENEMY_SIZE, Vec2::new(0.0, FAST_ENEMY_SPEED)),
             EnemyType::Big => (BIG_ENEMY_SIZE, Vec2::new(0.0, BIG_ENEMY_SPEED)),
             EnemyType::Zenith => (ZENITH_SIZE, Vec2::new(0.0, ZENITH_SPEED)),
@@ -692,6 +739,13 @@ impl GameState {
         self.power_ups.retain(|power_up| power_up.active);
         self.boss_bullets.retain(|bullet| bullet.active);
     }
+
+    pub fn new_with_difficulty(ctx: &mut Context, difficulty: Difficulty) -> Self {
+        let mut state = Self::new(ctx);
+        state.difficulty = difficulty;
+        state.config = difficulty.config();
+        state
+    }
 }
 
 impl EventHandler for GameState {
@@ -947,12 +1001,12 @@ impl EventHandler for GameState {
 
         // Spawn enemies - AGGRESSIVENESS controls frequency and count
         self.enemy_spawn_timer += dt;
-        if self.enemy_spawn_timer >= 0.7 / AGGRESSIVENESS {
-            let base_enemies = 5.0 * AGGRESSIVENESS;
+        if self.enemy_spawn_timer >= 0.7 / self.config.aggressiveness {
+            let base_enemies = self.config.enemy_base_amount * self.config.aggressiveness;
             let base_area = 1920.0 * 1080.0;
             let screen_area = crate::constants::get_screen_width() * crate::constants::get_screen_height();
             let scale = screen_area / base_area;
-            let num_enemies = (base_enemies * scale * AGGRESSIVENESS).ceil() as usize;
+            let num_enemies = (base_enemies * scale * self.config.aggressiveness).ceil() as usize;
             for _ in 0..num_enemies {
                 self.spawn_enemy();
             }
@@ -961,13 +1015,13 @@ impl EventHandler for GameState {
 
         // Spawn power-ups - scale with AGGRESSIVENESS (more frequent if higher)
         self.power_up_spawn_timer += dt;
-        if self.power_up_spawn_timer >= 8.0 / AGGRESSIVENESS {
+        if self.power_up_spawn_timer >= 8.0 / self.config.aggressiveness {
             self.spawn_power_up();
             self.power_up_spawn_timer = 0.0;
         }
 
         // Check for boss spawning (scale with AGGRESSIVENESS)
-        if self.score >= self.boss_spawn_score + (10000.0 / AGGRESSIVENESS) as u32 && self.boss.is_none() {
+        if self.score >= self.boss_spawn_score + (10000.0 / self.config.aggressiveness) as u32 && self.boss.is_none() {
             self.spawn_boss();
             self.boss_spawn_score = self.score;
         }
@@ -978,9 +1032,9 @@ impl EventHandler for GameState {
             
             // Spawn boss bullets based on attack patterns - scale with AGGRESSIVENESS
             let attack_interval = match boss.boss_type {
-                BossType::Destroyer => if boss.phase == 1 { 0.8 / AGGRESSIVENESS } else { 0.5 / AGGRESSIVENESS },
-                BossType::Carrier => if boss.phase == 1 { 1.2 / AGGRESSIVENESS } else { 0.8 / AGGRESSIVENESS },
-                BossType::Behemoth => if boss.phase == 1 { 1.0 / AGGRESSIVENESS } else { 0.6 / AGGRESSIVENESS },
+                BossType::Destroyer => if boss.phase == 1 { 0.8 / self.config.aggressiveness } else { 0.5 / self.config.aggressiveness },
+                BossType::Carrier => if boss.phase == 1 { 1.2 / self.config.aggressiveness } else { 0.8 / self.config.aggressiveness },
+                BossType::Behemoth => if boss.phase == 1 { 1.0 / self.config.aggressiveness } else { 0.6 / self.config.aggressiveness },
             };
             
             if boss.attack_timer >= attack_interval {

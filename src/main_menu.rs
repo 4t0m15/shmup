@@ -20,6 +20,7 @@ const BUTTON_SPACING: f32 = 70.0;
 pub enum MenuAction {
     None,
     StartGame,
+    SetDifficulty(crate::game_state::Difficulty),
     ShowStats,
     ShowControls,
     Quit,
@@ -28,6 +29,7 @@ pub enum MenuAction {
 #[derive(Debug)]
 pub enum MenuScreen {
     Main,
+    DifficultySelect,
     Stats,
     Controls,
     About,
@@ -70,6 +72,7 @@ pub struct MainMenu {
     time: f32,
     stars: Vec<Star>,
     stats: GameStats,
+    pub selected_difficulty: usize,
 }
 
 impl MainMenu {
@@ -135,6 +138,7 @@ impl MainMenu {
             time: 0.0,
             stars,
             stats,
+            selected_difficulty: 1, // Default to Standard
         }
     }
     
@@ -246,6 +250,38 @@ impl MainMenu {
         
         Ok(())
     }
+
+    fn draw_difficulty_select(&self, canvas: &mut graphics::Canvas, ctx: &Context) -> GameResult {
+        let title = Text::new(graphics::TextFragment::new("SELECT DIFFICULTY").scale(40.0));
+        canvas.draw(
+            &title,
+            DrawParam::default()
+                .dest(Vec2::new(get_screen_width() * 0.5 - title.dimensions(ctx).unwrap().w as f32 / 2.0, 100.0))
+                .color(Color::YELLOW),
+        );
+        let difficulties = [
+            ("Goober", Color::from_rgb(120, 200, 255)),
+            ("Standard", Color::from_rgb(255, 255, 255)),
+            ("Ultra-Violence", Color::from_rgb(255, 80, 80)),
+            ("Not when, how", Color::from_rgb(255, 0, 255)),
+        ];
+        let start_y = 200.0;
+        let spacing = 70.0;
+        for (i, (label, color)) in difficulties.iter().enumerate() {
+            let text = Text::new(graphics::TextFragment::new(*label).scale(32.0));
+            let is_selected = self.selected_difficulty == i;
+            let draw_color = if is_selected { *color } else { Color::from_rgb(180, 180, 180) };
+            canvas.draw(
+                &text,
+                DrawParam::default()
+                    .dest(Vec2::new(get_screen_width() * 0.5 - text.dimensions(ctx).unwrap().w as f32 / 2.0, start_y + i as f32 * spacing))
+                    .color(draw_color),
+            );
+        }
+        // Back button
+        self.draw_button(canvas, ctx, &self.back_btn_rect, &self.back_text, false)?;
+        Ok(())
+    }
 }
 
 impl EventHandler for MainMenu {
@@ -307,7 +343,9 @@ impl EventHandler for MainMenu {
                 self.draw_button(&mut canvas, ctx, &self.about_btn_rect, &self.about_text, self.selected_button == 3)?;
                 self.draw_button(&mut canvas, ctx, &self.quit_btn_rect, &self.quit_text, self.selected_button == 4)?;
             }
-            
+            MenuScreen::DifficultySelect => {
+                self.draw_difficulty_select(&mut canvas, ctx)?;
+            }
             MenuScreen::Stats => {
                 // Title
                 let title = Text::new(graphics::TextFragment::new("STATISTICS").scale(40.0));
@@ -396,7 +434,7 @@ impl EventHandler for MainMenu {
             match self.current_screen {
                 MenuScreen::Main => {
                     if self.play_btn_rect.contains([x, y]) {
-                        self.action = MenuAction::StartGame;
+                        self.current_screen = MenuScreen::DifficultySelect;
                     } else if self.stats_btn_rect.contains([x, y]) {
                         self.current_screen = MenuScreen::Stats;
                         self.refresh_stats();
@@ -406,6 +444,29 @@ impl EventHandler for MainMenu {
                         self.current_screen = MenuScreen::About;
                     } else if self.quit_btn_rect.contains([x, y]) {
                         self.action = MenuAction::Quit;
+                    }
+                }
+                MenuScreen::DifficultySelect => {
+                    let start_y = 200.0;
+                    let spacing = 70.0;
+                    let mouse_y = y;
+                    for i in 0..4 {
+                        let text = Text::new(graphics::TextFragment::new("").scale(32.0));
+                        let text_y = start_y + i as f32 * spacing;
+                        let text_h = 40.0;
+                        if mouse_y >= text_y && mouse_y <= text_y + text_h {
+                            self.selected_difficulty = i;
+                            self.action = MenuAction::SetDifficulty(match i {
+                                0 => crate::game_state::Difficulty::Goober,
+                                1 => crate::game_state::Difficulty::Standard,
+                                2 => crate::game_state::Difficulty::UltraViolence,
+                                3 => crate::game_state::Difficulty::NotWhenHow,
+                                _ => crate::game_state::Difficulty::Standard,
+                            });
+                        }
+                    }
+                    if self.back_btn_rect.contains([x, y]) {
+                        self.current_screen = MenuScreen::Main;
                     }
                 }
                 MenuScreen::Stats | MenuScreen::Controls | MenuScreen::About => {
@@ -434,7 +495,7 @@ impl EventHandler for MainMenu {
                     }
                     Some(ggez::input::keyboard::KeyCode::Return) => {
                         match self.selected_button {
-                            0 => self.action = MenuAction::StartGame,
+                            0 => self.current_screen = MenuScreen::DifficultySelect,
                             1 => {
                                 self.current_screen = MenuScreen::Stats;
                                 self.refresh_stats();
@@ -444,6 +505,33 @@ impl EventHandler for MainMenu {
                             4 => self.action = MenuAction::Quit,
                             _ => {}
                         }
+                    }
+                    _ => {}
+                }
+            }
+            MenuScreen::DifficultySelect => {
+                match input.keycode {
+                    Some(ggez::input::keyboard::KeyCode::Up) => {
+                        if self.selected_difficulty > 0 {
+                            self.selected_difficulty -= 1;
+                        }
+                    }
+                    Some(ggez::input::keyboard::KeyCode::Down) => {
+                        if self.selected_difficulty < 3 {
+                            self.selected_difficulty += 1;
+                        }
+                    }
+                    Some(ggez::input::keyboard::KeyCode::Return) => {
+                        self.action = MenuAction::SetDifficulty(match self.selected_difficulty {
+                            0 => crate::game_state::Difficulty::Goober,
+                            1 => crate::game_state::Difficulty::Standard,
+                            2 => crate::game_state::Difficulty::UltraViolence,
+                            3 => crate::game_state::Difficulty::NotWhenHow,
+                            _ => crate::game_state::Difficulty::Standard,
+                        });
+                    }
+                    Some(ggez::input::keyboard::KeyCode::Escape) => {
+                        self.current_screen = MenuScreen::Main;
                     }
                     _ => {}
                 }

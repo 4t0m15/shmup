@@ -83,6 +83,8 @@ pub const FAST_ENEMY_SPEED: f32 = 300.0;
 pub const BIG_ENEMY_SIZE: f32 = 40.0;
 pub const BIG_ENEMY_SPEED: f32 = 80.0;
 pub const BIG_ENEMY_SCORE: u32 = 30;
+// Base amount of enemies per spawn wave (scales with AGGRESSIVENESS and screen size)
+pub const ENEMY_BASE_AMOUNT: f32 = 3.0;
 
 // Stars
 pub const STAR_COUNT: usize = 100;
@@ -120,4 +122,4 @@ pub const ZENITH_BEAM_SPEED: f32 = 250.0; // Faster pull speed
 // Zenith spawn chance is now hardcoded in spawn_enemy() for more aggressive spawning 
 
 // Aggressiveness factor: controls enemy size, speed, and spawn count
-pub const AGGRESSIVENESS: f32 = 1.9; // 1.0 = normal, higher = more aggressive 
+pub const AGGRESSIVENESS: f32 = 1.5; // 1.0 = normal, higher = more aggressive 
