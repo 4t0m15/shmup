@@ -53,6 +53,8 @@ pub struct GameState {
     pub normal_enemies_killed: u32,
     pub fast_enemies_killed: u32,
     pub big_enemies_killed: u32,
+    pub grabbed_by_zenith: Option<usize>, // Index of Zenith enemy grabbing the player
+    pub zeniths_killed: u32,
 }
 
 impl GameState {
@@ -146,6 +148,8 @@ impl GameState {
             normal_enemies_killed: 0,
             fast_enemies_killed: 0,
             big_enemies_killed: 0,
+            grabbed_by_zenith: None,
+            zeniths_killed: 0,
         }
     }
 
@@ -165,15 +169,23 @@ impl GameState {
     pub fn spawn_enemy(&mut self) {
         let mut rng = rand::thread_rng();
         let x = rng.gen_range(ENEMY_SIZE..(SCREEN_WIDTH - ENEMY_SIZE));
-        let enemy_type = match rng.gen_range(0..10) {
-            0..=5 => EnemyType::Normal, // 60% chance
-            6..=7 => EnemyType::Fast,   // 20% chance
-            _ => EnemyType::Big,        // 20% chance
+        
+        // Check for Zenith spawn (3% chance)
+        let enemy_type = if rng.gen::<f32>() < ZENITH_SPAWN_CHANCE {
+            EnemyType::Zenith
+        } else {
+            match rng.gen_range(0..10) {
+                0..=5 => EnemyType::Normal, // 60% chance
+                6..=7 => EnemyType::Fast,   // 20% chance
+                _ => EnemyType::Big,        // 20% chance
+            }
         };
+        
         let (size, velocity) = match enemy_type {
             EnemyType::Normal => (ENEMY_SIZE, Vec2::new(0.0, ENEMY_SPEED)),
             EnemyType::Fast => (FAST_ENEMY_SIZE, Vec2::new(0.0, FAST_ENEMY_SPEED)),
             EnemyType::Big => (BIG_ENEMY_SIZE, Vec2::new(0.0, BIG_ENEMY_SPEED)),
+            EnemyType::Zenith => (ZENITH_SIZE, Vec2::new(0.0, ZENITH_SPEED)),
         };
         let enemy = Enemy::new(
             Vec2::new(x, -size),
@@ -260,6 +272,7 @@ impl GameState {
                     
                     let base_score = match enemy.enemy_type {
                         EnemyType::Big => BIG_ENEMY_SCORE,
+                        EnemyType::Zenith => 50, // Zenith gives more points
                         _ => 10,
                     };
                     let combo_score = (base_score as f32 * self.combo_multiplier) as u32;
@@ -276,6 +289,7 @@ impl GameState {
                         EnemyType::Normal => self.normal_enemies_killed += 1,
                         EnemyType::Fast => self.fast_enemies_killed += 1,
                         EnemyType::Big => self.big_enemies_killed += 1,
+                        EnemyType::Zenith => self.normal_enemies_killed += 1, // Count as normal for now
                     }
                 }
             }
@@ -333,11 +347,131 @@ impl GameState {
             }
         }
         
+        // Check laser-enemy collisions
+        if self.laser.is_firing {
+            let laser_bounds = self.laser.get_laser_bounds();
+            for (enemy_idx, enemy) in self.enemies.iter_mut().enumerate() {
+                if !enemy.active {
+                    continue;
+                }
+                // Check if enemy intersects with laser bounds
+                let enemy_rect = Rect::new(
+                    enemy.position.x - enemy.size / 2.0,
+                    enemy.position.y - enemy.size / 2.0,
+                    enemy.size,
+                    enemy.size,
+                );
+                if laser_bounds.overlaps(&enemy_rect) {
+                    enemies_to_destroy.push(enemy_idx);
+                    
+                    // Update combo system
+                    self.combo_counter += 1;
+                    self.combo_timer = COMBO_TIMEOUT;
+                    self.combo_multiplier = (COMBO_MULTIPLIER_BASE * self.combo_counter as f32).min(COMBO_MULTIPLIER_CAP);
+                    if self.combo_counter > self.max_combo {
+                        self.max_combo = self.combo_counter;
+                    }
+                    
+                    let base_score = match enemy.enemy_type {
+                        EnemyType::Big => BIG_ENEMY_SCORE,
+                        EnemyType::Zenith => 50, // Zenith gives more points
+                        _ => 10,
+                    };
+                    let combo_score = (base_score as f32 * self.combo_multiplier) as u32;
+                    self.score += combo_score;
+                    self.explosions.push(Explosion::new(enemy.position));
+                    self.screen_shake = 0.1;
+                    
+                    // Store combo effect position
+                    if self.combo_counter > 1 {
+                        combo_effects.push(enemy.position);
+                    }
+                    // Update kill counters
+                    match enemy.enemy_type {
+                        EnemyType::Normal => self.normal_enemies_killed += 1,
+                        EnemyType::Fast => self.fast_enemies_killed += 1,
+                        EnemyType::Big => self.big_enemies_killed += 1,
+                        EnemyType::Zenith => self.normal_enemies_killed += 1, // Count as normal for now
+                    }
+                }
+            }
+            
+            // Check laser-boss collisions
+            if let Some(boss) = &mut self.boss {
+                if boss.active {
+                    let boss_rect = Rect::new(
+                        boss.position.x - boss.size / 2.0,
+                        boss.position.y - boss.size / 2.0,
+                        boss.size,
+                        boss.size,
+                    );
+                                            if laser_bounds.overlaps(&boss_rect) {
+                            // Damage the boss continuously while laser is firing
+                            boss.take_damage(self.laser.damage * 0.016); // Fixed damage per frame (60 FPS)
+                        
+                        // Add screen shake for boss hits
+                        self.screen_shake = 0.15;
+                        
+                        // Check if boss is defeated
+                        if !boss.active {
+                            // Boss defeated!
+                            match boss.boss_type {
+                                BossType::Destroyer => self.destroyers_killed += 1,
+                                BossType::Carrier => self.carriers_killed += 1,
+                                BossType::Behemoth => self.behemoths_killed += 1,
+                            }
+                            let boss_score = match boss.boss_type {
+                                BossType::Destroyer => 1000,
+                                BossType::Carrier => 1500,
+                                BossType::Behemoth => 2000,
+                            };
+                            self.score += boss_score;
+                            self.screen_shake = 0.3; // Strong screen shake for boss defeat
+                            
+                            // Create multiple explosions for boss defeat
+                            for _ in 0..5 {
+                                let mut rng = rand::thread_rng();
+                                let offset = Vec2::new(
+                                    rng.gen_range(-boss.size..boss.size),
+                                    rng.gen_range(-boss.size..boss.size),
+                                );
+                                self.explosions.push(Explosion::new(boss.position + offset));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Zenith beam grab logic
+        if self.grabbed_by_zenith.is_none() {
+            for (i, enemy) in self.enemies.iter_mut().enumerate() {
+                if enemy.enemy_type == EnemyType::Zenith && enemy.is_zenith_beam_active() {
+                    let beam_rect = enemy.get_zenith_beam_bounds();
+                    let player_rect = Rect::new(
+                        self.player.position.x - PLAYER_SIZE / 2.0,
+                        self.player.position.y - PLAYER_SIZE / 2.0,
+                        PLAYER_SIZE,
+                        PLAYER_SIZE,
+                    );
+                    if beam_rect.overlaps(&player_rect) {
+                        self.grabbed_by_zenith = Some(i);
+                        break;
+                    }
+                }
+            }
+        }
+
         // Apply destruction and effects
         for &bullet_idx in bullets_to_destroy.iter().rev() {
             self.bullets[bullet_idx].active = false;
         }
         for &enemy_idx in enemies_to_destroy.iter().rev() {
+            if let Some(enemy) = self.enemies.get(enemy_idx) {
+                if enemy.enemy_type == EnemyType::Zenith {
+                    self.zeniths_killed += 1;
+                }
+            }
             self.enemies[enemy_idx].active = false;
         }
         for position in combo_effects {
@@ -519,11 +653,11 @@ impl EventHandler for GameState {
 
         // Handle laser charging and firing
         if self.power_up_timers[3] > 0.0 && !self.game_over { // Laser powerup active
-            if self.input.pressed(KeyCode::L) && !self.laser.is_charging && !self.laser.is_firing {
+            if self.input.pressed(KeyCode::Space) && !self.laser.is_charging && !self.laser.is_firing {
                 // Start charging laser
                 self.laser.start_charging(self.player.position);
-            } else if !self.input.pressed(KeyCode::L) && self.laser.is_charging {
-                // Fire laser when L key is released
+            } else if !self.input.pressed(KeyCode::Space) && self.laser.is_charging {
+                // Fire laser when Space key is released
                 self.laser.fire();
             }
         }
@@ -585,6 +719,8 @@ impl EventHandler for GameState {
         if self.power_up_timers[3] > 0.0 { // Laser powerup active
             self.laser.update_charging(dt);
             self.laser.update_firing(dt);
+            // Update laser position to follow player
+            self.laser.update_position(self.player.position);
         } else {
             // Reset laser when powerup expires
             self.laser = Laser::new();
@@ -681,6 +817,38 @@ impl EventHandler for GameState {
         // Update collisions
         self.update_collisions();
 
+        // Zenith grab movement
+        if let Some(zenith_idx) = self.grabbed_by_zenith {
+            if let Some(zenith) = self.enemies.get(zenith_idx) {
+                if zenith.enemy_type == EnemyType::Zenith && zenith.is_zenith_beam_active() {
+                    // Lerp player toward Zenith's y
+                    let target = Vec2::new(zenith.position.x, zenith.position.y + ZENITH_SIZE / 2.0 + PLAYER_SIZE / 2.0);
+                    let dir = (target - self.player.position).normalize_or_zero();
+                    self.player.velocity = dir * ZENITH_BEAM_SPEED;
+                    self.player.position += self.player.velocity * dt;
+                    // If player reaches Zenith or top, lose a life
+                    if (self.player.position.y <= zenith.position.y + ZENITH_SIZE / 2.0) || (self.player.position.y < 0.0) {
+                        if self.lives > 1 {
+                            self.lives -= 1;
+                            self.player.position = Vec2::new(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT - 50.0);
+                            self.player.velocity = Vec2::ZERO;
+                            self.invincible_timer = 1.0;
+                            self.screen_shake = 0.2;
+                        } else {
+                            self.game_over = true;
+                            self.check_high_score();
+                        }
+                        self.grabbed_by_zenith = None;
+                    }
+                } else {
+                    // Beam ended, release player
+                    self.grabbed_by_zenith = None;
+                }
+            } else {
+                self.grabbed_by_zenith = None;
+            }
+        }
+
         Ok(())
     }
 
@@ -758,6 +926,7 @@ impl EventHandler for GameState {
             let normal_text = Text::new(graphics::TextFragment::new(format!("Normal enemies killed: {}", self.normal_enemies_killed)).scale(24.0));
             let fast_text = Text::new(graphics::TextFragment::new(format!("Fast enemies killed: {}", self.fast_enemies_killed)).scale(24.0));
             let big_text = Text::new(graphics::TextFragment::new(format!("Big enemies killed: {}", self.big_enemies_killed)).scale(24.0));
+            let zenith_text = Text::new(graphics::TextFragment::new(format!("Zeniths killed: {}", self.zeniths_killed)).scale(24.0));
             let high_score_text = Text::new(graphics::TextFragment::new(format!("High Score: {}", self.high_score)).scale(20.0));
             let restart_text = Text::new(graphics::TextFragment::new("Press R to restart").scale(20.0));
 
@@ -830,6 +999,14 @@ impl EventHandler for GameState {
             // Big enemies
             canvas.draw(
                 &big_text,
+                DrawParam::default()
+                    .dest(Vec2::new(80.0, y))
+                    .color(Color::WHITE),
+            );
+            y += 30.0;
+            // Zeniths
+            canvas.draw(
+                &zenith_text,
                 DrawParam::default()
                     .dest(Vec2::new(80.0, y))
                     .color(Color::WHITE),
@@ -1031,8 +1208,8 @@ impl EventHandler for GameState {
             // Draw laser instruction popup
             if self.laser_instruction_timer > 0.0 {
                 let laser_title = Text::new("LASER WEAPON ACQUIRED!");
-                let laser_instruction1 = Text::new("Hold L key to charge the laser");
-                let laser_instruction2 = Text::new("Release L key to fire!");
+                let laser_instruction1 = Text::new("Hold SPACE to charge the laser");
+                let laser_instruction2 = Text::new("Release SPACE to fire!");
                 let laser_tip = Text::new("Longer charge = more damage!");
                 
                 let pulse = (std::time::SystemTime::now()

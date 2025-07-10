@@ -44,4 +44,14 @@ pub const LASER_DAMAGE_MAX: f32 = 200.0; // Maximum damage at full charge
 pub const LASER_WIDTH_BASE: f32 = 8.0; // Base laser width
 pub const LASER_WIDTH_MAX: f32 = 20.0; // Maximum laser width at full charge
 pub const LASER_COLOR_BASE: Color = Color::new(0.0, 1.0, 0.0, 1.0); // Green
-pub const LASER_COLOR_CHARGED: Color = Color::new(1.0, 0.0, 0.0, 1.0); // Red when fully charged 
+pub const LASER_COLOR_CHARGED: Color = Color::new(1.0, 0.0, 0.0, 1.0); // Red when fully charged
+
+// Zenith enemy constants
+pub const ZENITH_SIZE: f32 = 35.0;
+pub const ZENITH_SPEED: f32 = 120.0;
+pub const ZENITH_BEAM_CHARGE: f32 = 1.5; // Time to charge beam
+pub const ZENITH_BEAM_DURATION: f32 = 2.0; // Time beam is active
+pub const ZENITH_COOLDOWN: f32 = 3.0; // Cooldown after beam attack
+pub const ZENITH_BEAM_WIDTH: f32 = 15.0; // Width of the beam
+pub const ZENITH_BEAM_SPEED: f32 = 200.0; // Speed at which player is pulled
+pub const ZENITH_SPAWN_CHANCE: f32 = 0.03; // 3% chance to spawn instead of normal enemy 

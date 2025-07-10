@@ -96,6 +96,10 @@ impl Laser {
         }
     }
 
+    pub fn update_position(&mut self, player_position: Vec2) {
+        self.position = player_position;
+    }
+
     pub fn update_firing(&mut self, dt: f32) {
         if !self.is_firing {
             return;
