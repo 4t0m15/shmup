@@ -153,6 +153,7 @@ pub struct GameState {
     pub game_over_delay_timer: f32, // Timer for delay before showing game over screen
     pub play_time: f32, // Track total play time for this session
     pub stats: GameStats, // Game statistics
+    pub roboto_font: ggez::graphics::FontData,
 }
 
 impl GameState {
@@ -187,7 +188,7 @@ impl GameState {
         }
     }
 
-    pub fn new() -> Self {
+    pub fn new(ctx: &mut Context) -> Self {
         let mut rng = rand::thread_rng();
         let mut stars = Vec::with_capacity(STAR_COUNT);
         for _ in 0..STAR_COUNT {
@@ -208,6 +209,8 @@ impl GameState {
                 rng.gen_range(1.0..3.0),
             ));
         }
+        
+        let roboto_font = ggez::graphics::FontData::from_path(ctx, "/fonts/Roboto-VariableFont_wdth,wght.ttf").expect("Failed to load Roboto font");
         
         Self {
             player: Player::new(Vec2::new(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT - 50.0)),
@@ -253,6 +256,7 @@ impl GameState {
             game_over_delay_timer: 0.0,
             play_time: 0.0,
             stats: GameStats::load(),
+            roboto_font,
         }
     }
 
@@ -1339,39 +1343,8 @@ impl EventHandler for GameState {
                     .color(Color::YELLOW),
             );
 
-            // Draw combo system
-            if self.combo_counter > 0 {
-                let combo_text = Text::new(format!("Combo: {}x{}", self.combo_counter, self.combo_multiplier));
-                let combo_timer_text = Text::new(format!("Timer: {:.1}s", self.combo_timer));
-                let max_combo_text = Text::new(format!("Max Combo: {}", self.max_combo));
-                
-                // Combo text with pulsing effect
-                let pulse = (std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs_f32() * 3.0)
-                    .sin() * 0.3 + 0.7;
-                let combo_color = Color::new(1.0, 0.8, 0.0, pulse);
-                
-                canvas.draw(
-                    &combo_text,
-                    DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH - 200.0, 10.0) + shake_offset)
-                        .color(combo_color),
-                );
-                canvas.draw(
-                    &combo_timer_text,
-                    DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH - 200.0, 30.0) + shake_offset)
-                        .color(Color::new(1.0, 0.5, 0.0, 1.0)),
-                );
-                canvas.draw(
-                    &max_combo_text,
-                    DrawParam::default()
-                        .dest(Vec2::new(SCREEN_WIDTH - 200.0, 50.0) + shake_offset)
-                        .color(Color::YELLOW),
-                );
-            }
+            // Draw combo system (always visible, new panel)
+            self.draw_combo_panel(ctx, &mut canvas)?;
 
             // Draw power-up indicators
             let mut indicator_y = 60.0;
@@ -1584,7 +1557,7 @@ impl EventHandler for GameState {
             
             // Handle restart key
             if keycode == KeyCode::R && self.game_over {
-                *self = GameState::new();
+                *self = GameState::new(_ctx);
                 self.check_high_score();
             }
         }
@@ -1595,6 +1568,161 @@ impl EventHandler for GameState {
         if let Some(keycode) = input.keycode {
             self.input.held.remove(&keycode);
         }
+        Ok(())
+    }
+} 
+
+impl GameState {
+    fn draw_combo_panel(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) -> GameResult {
+        use ggez::graphics::{Color, DrawMode, DrawParam, Mesh, Rect, Text, TextFragment};
+        use ggez::glam::Vec2;
+        // Panel dimensions and position
+        let panel_w = 220.0;
+        let panel_h = 320.0;
+        let panel_x = 20.0;
+        let panel_y = 20.0;
+        let border_thick = 2.0;
+        let rule_thin = 1.0;
+        // Subdivision
+        let v_split = panel_x + panel_w * 0.55;
+        let h_split = panel_y + panel_h * 0.5;
+        // Draw outer frame
+        let frame = Mesh::new_rectangle(
+            ctx,
+            DrawMode::stroke(border_thick),
+            Rect::new(panel_x, panel_y, panel_w, panel_h),
+            Color::BLACK,
+        )?;
+        canvas.draw(&frame, DrawParam::default());
+        // Draw vertical rule
+        let vline = Mesh::new_rectangle(
+            ctx,
+            DrawMode::fill(),
+            Rect::new(v_split - rule_thin/2.0, panel_y, rule_thin, panel_h),
+            Color::BLACK,
+        )?;
+        canvas.draw(&vline, DrawParam::default());
+        // Draw horizontal rule
+        let hline = Mesh::new_rectangle(
+            ctx,
+            DrawMode::fill(),
+            Rect::new(panel_x, h_split - rule_thin/2.0, panel_w, rule_thin),
+            Color::BLACK,
+        )?;
+        canvas.draw(&hline, DrawParam::default());
+        // --- Upper-Left Panel: empty (reserved)
+        let ul_rect = Rect::new(panel_x, panel_y, v_split - panel_x, h_split - panel_y);
+        let ul_bg = Mesh::new_rectangle(ctx, DrawMode::fill(), ul_rect, Color::WHITE)?;
+        canvas.draw(&ul_bg, DrawParam::default());
+        // --- Upper-Right Panel: Time display
+        let ur_x = v_split;
+        let ur_y = panel_y;
+        let ur_w = panel_x + panel_w - v_split;
+        let ur_h = h_split - panel_y;
+        // Time text
+        let time_val = if self.combo_timer > 0.0 {
+            format!("{:.1} s", self.combo_timer)
+        } else {
+            "0.0 s".to_string()
+        };
+        let mut time_text = Text::new(TextFragment::new(time_val).scale(48.0).font(self.roboto_font));
+        let time_dim = time_text.dimensions(ctx).unwrap_or_default();
+        let time_x = ur_x + ur_w - time_dim.w as f32 - 10.0;
+        canvas.draw(
+            &time_text,
+            DrawParam::default().dest(Vec2::new(time_x, ur_y + 10.0)).color(Color::BLACK),
+        );
+        // Progress bar
+        let bar_margin = 10.0;
+        let bar_w = ur_w - 2.0 * bar_margin;
+        let bar_h = ur_h / 8.0;
+        let bar_x = ur_x + bar_margin;
+        let bar_y = ur_y + 70.0;
+        let max_time = crate::constants::COMBO_TIMEOUT;
+        let frac = (self.combo_timer / max_time).clamp(0.0, 1.0);
+        let filled_w = bar_w * frac;
+        // Red filled part
+        let bar_fill = Mesh::new_rectangle(
+            ctx,
+            DrawMode::fill(),
+            Rect::new(bar_x, bar_y, filled_w, bar_h),
+            Color::from_rgb(226, 33, 33),
+        )?;
+        canvas.draw(&bar_fill, DrawParam::default());
+        // White unfilled part
+        let bar_empty = Mesh::new_rectangle(
+            ctx,
+            DrawMode::fill(),
+            Rect::new(bar_x + filled_w, bar_y, bar_w - filled_w, bar_h),
+            Color::WHITE,
+        )?;
+        canvas.draw(&bar_empty, DrawParam::default());
+        // 'remaining' label (centered)
+        let mut rem_text = Text::new(TextFragment::new("remaining").scale(20.0).font(self.roboto_font));
+        let rem_dim = rem_text.dimensions(ctx).unwrap_or_default();
+        let rem_x = ur_x + (ur_w - rem_dim.w as f32) / 2.0;
+        canvas.draw(
+            &rem_text,
+            DrawParam::default().dest(Vec2::new(rem_x, bar_y + bar_h + 2.0)).color(Color::from_rgb(111, 111, 111)),
+        );
+        // --- Lower-Left Panel: Rank
+        let ll_x = panel_x;
+        let ll_y = h_split;
+        let ll_w = v_split - panel_x;
+        let ll_h = panel_y + panel_h - h_split;
+        let rank = if self.combo_counter > 0 {
+            match self.combo_counter {
+                20..=u32::MAX => "SSS",
+                15..=19 => "SS",
+                10..=14 => "S",
+                7..=9 => "A",
+                5..=6 => "B",
+                3..=4 => "C",
+                1..=2 => "D",
+                _ => "",
+            }
+        } else {
+            ""
+        };
+        let mut rank_text = Text::new(TextFragment::new(rank).scale(60.0).font(self.roboto_font));
+        let rank_y = ll_y + ll_h/2.0 - 40.0;
+        canvas.draw(
+            &rank_text,
+            DrawParam::default().dest(Vec2::new(ll_x + 10.0, rank_y)).color(Color::from_rgb(226, 33, 33)),
+        );
+        // --- Lower-Right Panel: Multiplier
+        let lr_x = v_split;
+        let lr_y = h_split;
+        let lr_w = panel_x + panel_w - v_split;
+        let lr_h = panel_y + panel_h - h_split;
+        // 'Mult:' label (left-aligned)
+        let mut mult_label = Text::new(TextFragment::new("Mult:").scale(32.0).font(self.roboto_font));
+        canvas.draw(
+            &mult_label,
+            DrawParam::default().dest(Vec2::new(lr_x + 8.0, lr_y + 10.0)).color(Color::BLACK),
+        );
+        // Multiplier value (centered)
+        let mult_val = if self.combo_counter > 0 {
+            format!("{:.1}x", self.combo_multiplier)
+        } else {
+            "0.0x".to_string()
+        };
+        let mut mult_text = Text::new(TextFragment::new(mult_val).scale(36.0).font(self.roboto_font));
+        let mult_dim = mult_text.dimensions(ctx).unwrap_or_default();
+        let mult_x = lr_x + (lr_w - mult_dim.w as f32) / 2.0;
+        canvas.draw(
+            &mult_text,
+            DrawParam::default().dest(Vec2::new(mult_x, lr_y + 60.0)).color(Color::BLACK),
+        );
+        // Underline
+        let underline_y = lr_y + 100.0;
+        let underline = Mesh::new_rectangle(
+            ctx,
+            DrawMode::fill(),
+            Rect::new(lr_x + 10.0, underline_y, lr_w - 20.0, 2.0),
+            Color::BLACK,
+        )?;
+        canvas.draw(&underline, DrawParam::default());
         Ok(())
     }
 } 
