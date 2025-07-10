@@ -122,10 +122,6 @@ impl Laser {
         )
     }
 
-    pub fn is_active(&self) -> bool {
-        self.is_charging || self.is_firing
-    }
-
     pub fn get_charge_progress(&self) -> f32 {
         (self.charge_time / LASER_CHARGE_TIME).min(1.0)
     }

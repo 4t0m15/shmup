@@ -1,5 +1,4 @@
 use ggez::{glam::Vec2, graphics::{self, Color, DrawMode, DrawParam, Mesh, Rect}};
-use crate::constants::*;
 
 #[derive(Clone)]
 pub struct Bullet {

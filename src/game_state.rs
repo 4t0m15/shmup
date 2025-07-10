@@ -14,6 +14,7 @@ use crate::input::InputState;
 use crate::entities::*;
 use crate::effects::*;
 use crate::weapons::*;
+use ggez::graphics::Drawable;
 
 pub struct GameState {
     pub player: Player,
@@ -46,6 +47,12 @@ pub struct GameState {
     pub boss_warning_timer: f32, // Timer for boss warning text
     pub laser: Laser,
     pub laser_instruction_timer: f32, // Timer for laser instruction popup
+    pub behemoths_killed: u32,
+    pub destroyers_killed: u32,
+    pub carriers_killed: u32,
+    pub normal_enemies_killed: u32,
+    pub fast_enemies_killed: u32,
+    pub big_enemies_killed: u32,
 }
 
 impl GameState {
@@ -133,6 +140,12 @@ impl GameState {
             boss_warning_timer: 0.0, // Initialize boss warning timer
             laser: Laser::new(),
             laser_instruction_timer: 0.0, // Initialize laser instruction timer
+            behemoths_killed: 0,
+            destroyers_killed: 0,
+            carriers_killed: 0,
+            normal_enemies_killed: 0,
+            fast_enemies_killed: 0,
+            big_enemies_killed: 0,
         }
     }
 
@@ -258,6 +271,12 @@ impl GameState {
                     if self.combo_counter > 1 {
                         combo_effects.push(enemy.position);
                     }
+                    // Update kill counters
+                    match enemy.enemy_type {
+                        EnemyType::Normal => self.normal_enemies_killed += 1,
+                        EnemyType::Fast => self.fast_enemies_killed += 1,
+                        EnemyType::Big => self.big_enemies_killed += 1,
+                    }
                 }
             }
         }
@@ -286,6 +305,11 @@ impl GameState {
                         // Check if boss is defeated
                         if !boss.active {
                             // Boss defeated!
+                            match boss.boss_type {
+                                BossType::Destroyer => self.destroyers_killed += 1,
+                                BossType::Carrier => self.carriers_killed += 1,
+                                BossType::Behemoth => self.behemoths_killed += 1,
+                            }
                             let boss_score = match boss.boss_type {
                                 BossType::Destroyer => 1000,
                                 BossType::Carrier => 1500,
@@ -724,34 +748,106 @@ impl EventHandler for GameState {
         }
 
         if self.game_over {
-            // Draw game over screen
-            let game_over_text = Text::new("GAME OVER");
-            let score_text = Text::new(format!("Final Score: {}", self.score));
-            let high_score_text = Text::new(format!("High Score: {}", self.high_score));
-            let restart_text = Text::new("Press R to restart");
+            // Enhanced game over screen
+            let score_text = Text::new(graphics::TextFragment::new(format!("SCORE: {}", self.score)).scale(48.0));
+            let game_over_text = Text::new(graphics::TextFragment::new("Game Over").scale(36.0));
+            let stats_title = Text::new(graphics::TextFragment::new("Stats:").scale(28.0));
+            let behemoth_text = Text::new(graphics::TextFragment::new(format!("Behemoths killed: {}", self.behemoths_killed)).scale(24.0));
+            let destroyer_text = Text::new(graphics::TextFragment::new(format!("Destroyers killed: {}", self.destroyers_killed)).scale(24.0));
+            let carrier_text = Text::new(graphics::TextFragment::new(format!("Carriers killed: {}", self.carriers_killed)).scale(24.0));
+            let normal_text = Text::new(graphics::TextFragment::new(format!("Normal enemies killed: {}", self.normal_enemies_killed)).scale(24.0));
+            let fast_text = Text::new(graphics::TextFragment::new(format!("Fast enemies killed: {}", self.fast_enemies_killed)).scale(24.0));
+            let big_text = Text::new(graphics::TextFragment::new(format!("Big enemies killed: {}", self.big_enemies_killed)).scale(24.0));
+            let high_score_text = Text::new(graphics::TextFragment::new(format!("High Score: {}", self.high_score)).scale(20.0));
+            let restart_text = Text::new(graphics::TextFragment::new("Press R to restart").scale(20.0));
 
-            canvas.draw(
-                &game_over_text,
-                DrawParam::default()
-                    .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 100.0, SCREEN_HEIGHT / 2.0 - 80.0) + shake_offset)
-                    .color(Color::RED),
-            );
+            let center_x = SCREEN_WIDTH / 2.0;
+            let mut y = 60.0;
+            // Score
             canvas.draw(
                 &score_text,
                 DrawParam::default()
-                    .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 80.0, SCREEN_HEIGHT / 2.0 - 30.0) + shake_offset)
+                    .dest(Vec2::new(center_x - score_text.dimensions(ctx).unwrap().w as f32 / 2.0, y))
                     .color(Color::WHITE),
             );
+            y += 60.0;
+            // Game Over
+            canvas.draw(
+                &game_over_text,
+                DrawParam::default()
+                    .dest(Vec2::new(center_x - game_over_text.dimensions(ctx).unwrap().w as f32 / 2.0, y))
+                    .color(Color::RED),
+            );
+            y += 60.0;
+            // Stats title
+            canvas.draw(
+                &stats_title,
+                DrawParam::default()
+                    .dest(Vec2::new(60.0, y))
+                    .color(Color::WHITE),
+            );
+            y += 40.0;
+            // Behemoths
+            canvas.draw(
+                &behemoth_text,
+                DrawParam::default()
+                    .dest(Vec2::new(80.0, y))
+                    .color(Color::WHITE),
+            );
+            y += 30.0;
+            // Destroyers
+            canvas.draw(
+                &destroyer_text,
+                DrawParam::default()
+                    .dest(Vec2::new(80.0, y))
+                    .color(Color::WHITE),
+            );
+            y += 30.0;
+            // Carriers
+            canvas.draw(
+                &carrier_text,
+                DrawParam::default()
+                    .dest(Vec2::new(80.0, y))
+                    .color(Color::WHITE),
+            );
+            y += 30.0;
+            // Normal enemies
+            canvas.draw(
+                &normal_text,
+                DrawParam::default()
+                    .dest(Vec2::new(80.0, y))
+                    .color(Color::WHITE),
+            );
+            y += 30.0;
+            // Fast enemies
+            canvas.draw(
+                &fast_text,
+                DrawParam::default()
+                    .dest(Vec2::new(80.0, y))
+                    .color(Color::WHITE),
+            );
+            y += 30.0;
+            // Big enemies
+            canvas.draw(
+                &big_text,
+                DrawParam::default()
+                    .dest(Vec2::new(80.0, y))
+                    .color(Color::WHITE),
+            );
+            y += 50.0;
+            // High score
             canvas.draw(
                 &high_score_text,
                 DrawParam::default()
-                    .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 80.0, SCREEN_HEIGHT / 2.0) + shake_offset)
+                    .dest(Vec2::new(center_x - high_score_text.dimensions(ctx).unwrap().w as f32 / 2.0, y))
                     .color(Color::YELLOW),
             );
+            y += 30.0;
+            // Restart
             canvas.draw(
                 &restart_text,
                 DrawParam::default()
-                    .dest(Vec2::new(SCREEN_WIDTH / 2.0 - 80.0, SCREEN_HEIGHT / 2.0 + 30.0) + shake_offset)
+                    .dest(Vec2::new(center_x - restart_text.dimensions(ctx).unwrap().w as f32 / 2.0, y))
                     .color(Color::WHITE),
             );
         } else {
