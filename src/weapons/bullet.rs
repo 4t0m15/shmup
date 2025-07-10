@@ -1,6 +1,6 @@
 use ggez::{glam::Vec2, graphics::{self, Color, DrawMode, DrawParam, Mesh, Rect}};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Bullet {
     pub position: Vec2,
     pub velocity: Vec2,

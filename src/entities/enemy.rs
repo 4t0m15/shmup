@@ -2,7 +2,7 @@ use ggez::{glam::Vec2, graphics::{self, Color, DrawMode, DrawParam, Mesh, Rect}}
 use crate::constants::*;
 use rand::Rng;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EnemyType {
     Normal,
     Fast,
@@ -10,7 +10,7 @@ pub enum EnemyType {
     Zenith,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ZenithState {
     Idle,
     Charging,
@@ -18,7 +18,7 @@ pub enum ZenithState {
     Cooldown,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Enemy {
     pub position: Vec2,
     pub velocity: Vec2,

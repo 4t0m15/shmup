@@ -1,14 +1,14 @@
 use ggez::{glam::Vec2, graphics::{self, Color, DrawMode, DrawParam, Mesh, Rect}};
 use crate::constants::*;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum BossType {
     Destroyer,
     Carrier,
     Behemoth,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Boss {
     pub position: Vec2,
     pub velocity: Vec2,

@@ -1,5 +1,6 @@
 use ggez::{glam::Vec2, graphics::Color};
 
+#[derive(Debug)]
 pub struct Particle {
     pub position: Vec2,
     pub velocity: Vec2,

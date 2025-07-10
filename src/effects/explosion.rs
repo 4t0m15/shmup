@@ -3,6 +3,7 @@ use rand::Rng;
 use crate::constants::*;
 use super::particle::Particle;
 
+#[derive(Debug)]
 pub struct Explosion {
     pub timer: f32,
     pub particles: Vec<Particle>,

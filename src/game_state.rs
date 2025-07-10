@@ -8,6 +8,7 @@ use ggez::glam::Vec2;
 use rand::Rng;
 use std::fs;
 use std::io::Write;
+use serde::{Deserialize, Serialize};
 
 use crate::constants::*;
 use crate::input::InputState;
@@ -16,6 +17,98 @@ use crate::effects::*;
 use crate::weapons::*;
 use ggez::graphics::Drawable;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GameStats {
+    pub high_score: u32,
+    pub total_games_played: u32,
+    pub total_play_time: f32,
+    pub total_enemies_killed: u32,
+    pub normal_enemies_killed: u32,
+    pub fast_enemies_killed: u32,
+    pub big_enemies_killed: u32,
+    pub behemoths_killed: u32,
+    pub destroyers_killed: u32,
+    pub carriers_killed: u32,
+    pub zeniths_killed: u32,
+    pub bosses_killed: u32,
+    pub total_score: u32,
+    pub max_combo: u32,
+    pub power_ups_collected: u32,
+}
+
+impl Default for GameStats {
+    fn default() -> Self {
+        Self {
+            high_score: 0,
+            total_games_played: 0,
+            total_play_time: 0.0,
+            total_enemies_killed: 0,
+            normal_enemies_killed: 0,
+            fast_enemies_killed: 0,
+            big_enemies_killed: 0,
+            behemoths_killed: 0,
+            destroyers_killed: 0,
+            carriers_killed: 0,
+            zeniths_killed: 0,
+            bosses_killed: 0,
+            total_score: 0,
+            max_combo: 0,
+            power_ups_collected: 0,
+        }
+    }
+}
+
+impl GameStats {
+    pub fn load() -> Self {
+        // Create saves directory if it doesn't exist
+        if let Err(e) = fs::create_dir_all("saves") {
+            eprintln!("Failed to create saves directory: {}", e);
+        }
+        
+        match fs::read_to_string("saves/stats.json") {
+            Ok(content) => {
+                match serde_json::from_str(&content) {
+                    Ok(stats) => stats,
+                    Err(e) => {
+                        eprintln!("Failed to parse stats file: {}", e);
+                        Self::default()
+                    }
+                }
+            }
+            Err(_) => Self::default(),
+        }
+    }
+
+    pub fn save(&self) {
+        // Create saves directory if it doesn't exist
+        if let Err(e) = fs::create_dir_all("saves") {
+            eprintln!("Failed to create saves directory: {}", e);
+            return;
+        }
+        
+        match fs::File::create("saves/stats.json") {
+            Ok(mut file) => {
+                match serde_json::to_string_pretty(self) {
+                    Ok(json) => {
+                        if let Err(e) = writeln!(file, "{}", json) {
+                            eprintln!("Failed to write stats: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to serialize stats: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to create stats file: {}", e);
+            }
+        }
+    }
+
+
+}
+
+#[derive(Debug)]
 pub struct GameState {
     pub player: Player,
     pub bullets: Vec<Bullet>,
@@ -55,6 +148,11 @@ pub struct GameState {
     pub big_enemies_killed: u32,
     pub grabbed_by_zenith: Option<usize>, // Index of Zenith enemy grabbing the player
     pub zeniths_killed: u32,
+    pub death_explosion: Option<Explosion>, // Massive explosion when player dies
+    pub death_explosion_timer: f32, // Timer for death explosion
+    pub game_over_delay_timer: f32, // Timer for delay before showing game over screen
+    pub play_time: f32, // Track total play time for this session
+    pub stats: GameStats, // Game statistics
 }
 
 impl GameState {
@@ -150,6 +248,11 @@ impl GameState {
             big_enemies_killed: 0,
             grabbed_by_zenith: None,
             zeniths_killed: 0,
+            death_explosion: None,
+            death_explosion_timer: 0.0,
+            game_over_delay_timer: 0.0,
+            play_time: 0.0,
+            stats: GameStats::load(),
         }
     }
 
@@ -158,6 +261,44 @@ impl GameState {
             self.high_score = self.score;
             Self::save_high_score(self.high_score);
         }
+    }
+
+    pub fn create_death_explosion(&mut self) {
+        // Create a massive explosion at player position
+        let mut particles = Vec::new();
+        let mut rng = rand::thread_rng();
+        
+        // Create many more particles for a massive explosion
+        for _ in 0..200 { // Double the particles
+            let angle = rng.gen_range(0.0..std::f32::consts::PI * 2.0);
+            let speed = rng.gen_range(150.0..600.0); // Even faster particles
+            let velocity = Vec2::new(angle.cos() * speed, angle.sin() * speed);
+            let life = rng.gen_range(2.0..4.0); // Even longer life
+            let color = match rng.gen_range(0..5) {
+                0 => ggez::graphics::Color::new(1.0, 0.8, 0.2, 1.0), // Yellow
+                1 => ggez::graphics::Color::new(1.0, 0.4, 0.0, 1.0), // Orange
+                2 => ggez::graphics::Color::new(1.0, 0.2, 0.0, 1.0), // Red
+                3 => ggez::graphics::Color::new(1.0, 1.0, 1.0, 1.0), // White
+                _ => ggez::graphics::Color::new(1.0, 0.0, 0.0, 1.0), // Pure red
+            };
+            let size = rng.gen_range(5.0..15.0); // Even larger particles
+            
+            particles.push(crate::effects::Particle::new(
+                self.player.position, 
+                velocity, 
+                life, 
+                color, 
+                size
+            ));
+        }
+        
+        self.death_explosion = Some(Explosion {
+            timer: 0.0,
+            particles,
+        });
+        self.death_explosion_timer = 2.0; // 2 seconds for death explosion
+        self.game_over_delay_timer = 1.0; // 1 second delay before game over screen
+        self.screen_shake = 0.8; // Even more massive screen shake
     }
 
     pub fn create_combo_text_effect(&mut self, position: Vec2) {
@@ -526,8 +667,8 @@ impl GameState {
                     self.combo_multiplier = 1.0;
                     self.combo_timer = 0.0;
                 } else {
-                    self.game_over = true;
-                    self.check_high_score();
+                    // Create massive death explosion
+                    self.create_death_explosion();
                 }
             }
         }
@@ -542,11 +683,72 @@ impl GameState {
 
 impl EventHandler for GameState {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
+        let dt = ctx.time.delta().as_secs_f32();
+        
+        // Handle death explosion
+        if let Some(ref mut explosion) = self.death_explosion {
+            explosion.update(dt);
+            self.death_explosion_timer -= dt;
+            self.game_over_delay_timer -= dt;
+            
+            // Set game over after delay
+            if !self.game_over && self.game_over_delay_timer <= 0.0 {
+                self.game_over = true;
+                self.check_high_score();
+                // Save stats when game ends
+                let play_time = self.play_time;
+                let score = self.score;
+                let max_combo = self.max_combo;
+                let normal_enemies_killed = self.normal_enemies_killed;
+                let fast_enemies_killed = self.fast_enemies_killed;
+                let big_enemies_killed = self.big_enemies_killed;
+                let behemoths_killed = self.behemoths_killed;
+                let destroyers_killed = self.destroyers_killed;
+                let carriers_killed = self.carriers_killed;
+                let zeniths_killed = self.zeniths_killed;
+                
+                self.stats.total_games_played += 1;
+                self.stats.total_play_time += play_time;
+                self.stats.total_score += score;
+                
+                if score > self.stats.high_score {
+                    self.stats.high_score = score;
+                }
+                
+                if max_combo > self.stats.max_combo {
+                    self.stats.max_combo = max_combo;
+                }
+                
+                self.stats.normal_enemies_killed += normal_enemies_killed;
+                self.stats.fast_enemies_killed += fast_enemies_killed;
+                self.stats.big_enemies_killed += big_enemies_killed;
+                self.stats.behemoths_killed += behemoths_killed;
+                self.stats.destroyers_killed += destroyers_killed;
+                self.stats.carriers_killed += carriers_killed;
+                self.stats.zeniths_killed += zeniths_killed;
+                
+                self.stats.total_enemies_killed = self.stats.normal_enemies_killed + self.stats.fast_enemies_killed + 
+                                               self.stats.big_enemies_killed + self.stats.behemoths_killed + 
+                                               self.stats.destroyers_killed + self.stats.carriers_killed + 
+                                               self.stats.zeniths_killed;
+                
+                self.stats.save();
+                // Keep screen shake going for dramatic effect
+            }
+            
+            // When explosion finishes, clean up
+            if self.death_explosion_timer <= 0.0 {
+                self.death_explosion = None;
+            }
+        }
+        
         if self.game_over {
             return Ok(());
         }
 
-        let dt = ctx.time.delta().as_secs_f32();
+        // Update play time when game is active
+        self.play_time += dt;
+
         self.input.poll(ctx);
 
         // Update screen shake
@@ -835,8 +1037,8 @@ impl EventHandler for GameState {
                             self.invincible_timer = 1.0;
                             self.screen_shake = 0.2;
                         } else {
-                            self.game_over = true;
-                            self.check_high_score();
+                            // Create massive death explosion
+                            self.create_death_explosion();
                         }
                         self.grabbed_by_zenith = None;
                     }
@@ -915,7 +1117,7 @@ impl EventHandler for GameState {
             canvas.draw(&heart_mesh, DrawParam::default());
         }
 
-        if self.game_over {
+        if self.game_over && self.game_over_delay_timer <= 0.0 {
             // Enhanced game over screen
             let score_text = Text::new(graphics::TextFragment::new(format!("SCORE: {}", self.score)).scale(48.0));
             let game_over_text = Text::new(graphics::TextFragment::new("Game Over").scale(36.0));
@@ -928,7 +1130,7 @@ impl EventHandler for GameState {
             let big_text = Text::new(graphics::TextFragment::new(format!("Big enemies killed: {}", self.big_enemies_killed)).scale(24.0));
             let zenith_text = Text::new(graphics::TextFragment::new(format!("Zeniths killed: {}", self.zeniths_killed)).scale(24.0));
             let high_score_text = Text::new(graphics::TextFragment::new(format!("High Score: {}", self.high_score)).scale(20.0));
-            let restart_text = Text::new(graphics::TextFragment::new("Press R to restart").scale(20.0));
+            let restart_text = Text::new(graphics::TextFragment::new("Press R to restart or ESC for menu").scale(20.0));
 
             let center_x = SCREEN_WIDTH / 2.0;
             let mut y = 60.0;
@@ -1028,8 +1230,10 @@ impl EventHandler for GameState {
                     .color(Color::WHITE),
             );
         } else {
-            // Draw player
-            self.player.draw(ctx, &mut canvas, self.invincible_timer, self.power_up_timers[2] > 0.0)?;
+            // Draw player (only if not in death explosion)
+            if self.death_explosion.is_none() {
+                self.player.draw(ctx, &mut canvas, self.invincible_timer, self.power_up_timers[2] > 0.0)?;
+            }
 
             // Draw bullets
             for bullet in &self.bullets {
@@ -1058,6 +1262,29 @@ impl EventHandler for GameState {
 
             // Draw explosions with particles
             for explosion in &self.explosions {
+                for particle in &explosion.particles {
+                    if !particle.is_dead() {
+                        let color = Color::new(
+                            particle.color.r,
+                            particle.color.g,
+                            particle.color.b,
+                            particle.get_alpha(),
+                        );
+                        let mesh = Mesh::new_circle(
+                            ctx,
+                            DrawMode::fill(),
+                            particle.position + shake_offset,
+                            particle.size,
+                            0.1,
+                            color,
+                        )?;
+                        canvas.draw(&mesh, DrawParam::default());
+                    }
+                }
+            }
+
+            // Draw death explosion (if active)
+            if let Some(ref explosion) = self.death_explosion {
                 for particle in &explosion.particles {
                     if !particle.is_dead() {
                         let color = Color::new(
@@ -1316,6 +1543,29 @@ impl EventHandler for GameState {
             // Draw laser beam
             if self.laser.is_firing {
                 self.laser.draw(ctx, &mut canvas)?;
+            }
+        }
+
+        // Draw death explosion even during game over screen
+        if let Some(ref explosion) = self.death_explosion {
+            for particle in &explosion.particles {
+                if !particle.is_dead() {
+                    let color = Color::new(
+                        particle.color.r,
+                        particle.color.g,
+                        particle.color.b,
+                        particle.get_alpha(),
+                    );
+                    let mesh = Mesh::new_circle(
+                        ctx,
+                        DrawMode::fill(),
+                        particle.position + shake_offset,
+                        particle.size,
+                        0.1,
+                        color,
+                    )?;
+                    canvas.draw(&mesh, DrawParam::default());
+                }
             }
         }
 

@@ -1,7 +1,7 @@
 use ggez::{glam::Vec2, graphics::{self, Color, DrawMode, DrawParam, Mesh, Rect}};
 use crate::constants::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Player {
     pub position: Vec2,
     pub velocity: Vec2,

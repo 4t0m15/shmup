@@ -1,6 +1,6 @@
 use ggez::{Context, input::keyboard};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct InputState {
     pub held: std::collections::HashSet<keyboard::KeyCode>,
 }

@@ -2,6 +2,7 @@ use ggez::glam::Vec2;
 use rand::Rng;
 use crate::constants::*;
 
+#[derive(Debug)]
 pub struct Star {
     pub position: Vec2,
     pub speed: f32,

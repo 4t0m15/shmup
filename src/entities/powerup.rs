@@ -1,6 +1,6 @@
 use ggez::{glam::Vec2, graphics::{self, Color, DrawMode, DrawParam, Mesh, Rect}};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PowerUpType {
     RapidFire,
     TripleShot,
@@ -8,7 +8,7 @@ pub enum PowerUpType {
     Laser,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PowerUp {
     pub position: Vec2,
     pub velocity: Vec2,

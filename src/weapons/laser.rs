@@ -3,6 +3,7 @@ use rand::Rng;
 use crate::constants::*;
 use crate::effects::particle::Particle;
 
+#[derive(Debug)]
 pub struct Laser {
     pub is_charging: bool,
     pub charge_time: f32,
