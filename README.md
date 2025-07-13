@@ -1,57 +1,72 @@
-# WipShmup - A Basic Shoot 'Em Up Game
+# WipShmup - Space Shoot 'Em Up
 
-A simple shoot 'em up game built in Rust using the ggez game framework.
+A shoot 'em up game built in Rust using the ggez game framework.
 
 ## Features
 
-- **Player Movement**: Control your ship with WASD or arrow keys
-- **Shooting**: Press Spacebar to shoot bullets
-- **Enemy Spawning**: Enemies spawn from the top of the screen
-- **Collision Detection**: Bullets destroy enemies, enemies destroy player
-- **Scoring System**: Earn points for each enemy destroyed
-- **Game Over**: When you collide with an enemy, game ends with final score
-- **Restart**: Press R to restart after game over
+- **Difficulty Selection**: Four difficulties: Goober, Standard, Ultra-Violence, Not when, how.
+- **Player Movement**: Smooth WASD or arrow key movement.
+- **Gameplay**: Fire bullets with Spacebar. Hold Spacebar (with Laser power-up) to charge and unleash a powerful laser.
+- **Power-Ups**:
+   - **Rapid Fire**: Shoot much faster for a limited time.
+   - **Triple Shot**: Fire three bullets at once.
+   - **Shield**: Temporary invincibility.
+   - **Laser**: Charge and fire a devastating laser beam.
+- **Enemy Types**:
+   - **Normal (Red)**: Standard enemy, 10 points.
+   - **Fast (Green)**: Moves quickly, 10 points.
+   - **Big (Magenta)**: Large and tough, 30 points.
+   - **Zenith (White)**: Aggressive, can grab the player, 50 points.
+- **Bosses**:
+   - **Destroyer (Red)**: 1000 points.
+   - **Carrier (Purple)**: 1500 points.
+   - **Behemoth (Blue)**: 2000 points.
+- **Combo System**: Kill enemies quickly to build combos and increase your score multiplier.
+- **Statistics**: Tracks high score, games played, total play time, enemies killed (by type), bosses defeated, max combo, and more.
+- **Game Over & Restart**: Lose all lives to trigger a dramatic explosion and game over. Press R to restart.
+- **Fullscreen & Scaling**: Automatically detects and uses your monitor's resolution.
 
 ## Controls
 
-- **WASD** or **Arrow Keys**: Move the player ship
+- **WASD / Arrow Keys**: Move your ship
 - **Spacebar**: Shoot bullets
-- **R**: Restart the game (when game over)
+- **Hold Spacebar (with Laser power-up)**: Charge and fire laser
+- **R**: Restart after game over
+- **ESC**: Return to menu (when game is over or in submenus)
+- **Mouse**: Navigate and click menu buttons
+- **Enter/Return**: Select menu options
+- **Up/Down**: Navigate menu options
+
+## Menus & Screens
+
+- **Main Menu**: Play, Statistics, Controls, About, Quit
+- **Difficulty Select**: Choose from four difficulties, each with unique enemy behavior
+- **Statistics**: View your high score, play time, kill counts, combos, and more
+- **Controls**: Quick reference for all controls
+- **About**: Game rules, enemy/boss point values, and version info
 
 ## How to Play
 
 1. **Build and Run**:
-   ```bash
-   cargo run
-   ```
+   Navigate to the "src" folder and run "cargo run"
 
-2. **Objective**: Destroy as many enemies as possible while avoiding collisions
-3. **Movement**: Use WASD or arrow keys to move your blue ship
-4. **Shooting**: Press Spacebar to fire yellow bullets upward
-5. **Enemies**: Red squares spawn from the top and move downward
-6. **Scoring**: Each enemy destroyed gives you 10 points
-7. **Game Over**: If an enemy hits your ship, the game ends
-8. **Restart**: Press R to start a new game
+2. **Choose Difficulty**: Select your challenge level
+3. **Survive**: Dodge enemies, collect power-ups, and defeat bosses
+4. **Score**: Build combos for higher multipliers and maximize your score
+5. **Game Over**: Try to beat your high score and stats!
 
-## Game Elements
+## "Tech specs"
 
-- **Blue Square**: Your player ship
-- **Yellow Circles**: Your bullets
-- **Red Squares**: Enemy ships
-- **Score Display**: Shows current score in top-left corner
-
-## Technical Details
-
-- Built with Rust and ggez game framework
-- 800x600 pixel window
-- 60 FPS gameplay
-- Collision detection using rectangular bounds
-- Smooth movement with delta time
+- Built with Rust and ggez
+- Fullscreen, auto-scaling to your monitor
+- Modular codebase (entities, effects, weapons, menus, stats)
+- Save files for high score and statistics in `saves/`
 
 ## Dependencies
 
 - `ggez`: Game framework
-- `glam`: Vector math library
+- `glam`: Vector math
 - `rand`: Random number generation
+- `serde`, `serde_json`: For saving/loading stats
 
-Enjoy the game! 
+Thanks for reading!
