@@ -1,12 +1,12 @@
-# WipShmup - Space Shoot 'Em Up
+# WipShmup - "Work in Progress Shoot 'em Up"
 
-A shoot 'em up game built in Rust using the ggez game framework.
+A shoot 'em up game built in Rust using ggez.
 
 ## Features
 
 - **Difficulty Selection**: Four difficulties: Goober, Standard, Ultra-Violence, Not when, how.
-- **Player Movement**: Smooth WASD or arrow key movement.
-- **Gameplay**: Fire bullets with Spacebar. Hold Spacebar (with Laser power-up) to charge and unleash a powerful laser.
+- **Player Movement**: wasd/arrow keys (I prefer arrow keys).
+- **Gameplay**: Fire bullets with the spacebar. Hold the spacebar (with Laser power-up) to charge and release to fire a laser that ista-kills enemies.
 - **Power-Ups**:
    - **Rapid Fire**: Shoot much faster for a limited time.
    - **Triple Shot**: Fire three bullets at once.
@@ -16,19 +16,19 @@ A shoot 'em up game built in Rust using the ggez game framework.
    - **Normal (Red)**: Standard enemy, 10 points.
    - **Fast (Green)**: Moves quickly, 10 points.
    - **Big (Magenta)**: Large and tough, 30 points.
-   - **Zenith (White)**: Aggressive, can grab the player, 50 points.
+   - **Zenith (White)**: Aggressive, "grabs" the player, 50 points.
 - **Bosses**:
    - **Destroyer (Red)**: 1000 points.
    - **Carrier (Purple)**: 1500 points.
    - **Behemoth (Blue)**: 2000 points.
 - **Combo System**: Kill enemies quickly to build combos and increase your score multiplier.
-- **Statistics**: Tracks high score, games played, total play time, enemies killed (by type), bosses defeated, max combo, and more.
-- **Game Over & Restart**: Lose all lives to trigger a dramatic explosion and game over. Press R to restart.
-- **Fullscreen & Scaling**: Automatically detects and uses your monitor's resolution.
+- **Statistics**: Tracks high score, games played, total time spent, enemies killed (by type), bosses defeated and max combo,
+- **Game Over & Restart**: Lose all lives to trigger an explosion and be forced to restart.
+- **Fullscreen & Scaling**: Automatically detects and uses your monitor's resolution and adapts enemy size/difficulty.
 
 ## Controls
 
-- **WASD / Arrow Keys**: Move your ship
+- **WASD / Arrow Keys**: Move
 - **Spacebar**: Shoot bullets
 - **Hold Spacebar (with Laser power-up)**: Charge and fire laser
 - **R**: Restart after game over
@@ -49,11 +49,10 @@ A shoot 'em up game built in Rust using the ggez game framework.
 
 1. **Build and Run**:
    Navigate to the "src" folder and run "cargo run"
-
-2. **Choose Difficulty**: Select your challenge level
+2. **Choose Difficulty**
 3. **Survive**: Dodge enemies, collect power-ups, and defeat bosses
-4. **Score**: Build combos for higher multipliers and maximize your score
-5. **Game Over**: Try to beat your high score and stats!
+4. **Score**: Build combos for higher multipliers and aim for a high score
+5. **Game Over**: Play again, or be productive, its up to you.
 
 ## "Tech specs"
 
