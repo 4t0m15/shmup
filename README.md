@@ -2,6 +2,43 @@
 
 A shoot 'em up game built in Rust using ggez.
 
+## Linux FIX:
+Explanation:
+    The Alsa-sys crate uses pkg-config to find the system-installed ALSA development files and libasound2-dev is the development package that provides the alsa.pc file and necessary headers.
+
+    The crate libudev-sys needs to be installed since it depends on the libudev system library for input device detection (e.g., gamepads). The package systemd-devel (or equivalent) provides the required libudev.pc file and headers.
+
+    "Why are the commands different?"
+    You are downloading the same thing, but the package names vary between distros.
+
+Debian Based (Ubuntu/Mint/PopOS)
+
+    sudo apt update
+
+    sudo apt install libasound2-dev pkg-config
+
+    sudo apt install libudev-dev
+
+Arch Based
+
+    sudo pacman -Syu
+
+    sudo pacman -S alsa-lib pkgconf
+
+    sudo pacman -S systemd
+
+Fedora/RHEL
+
+    sudo dnf update
+
+    sudo dnf install alsa-lib-devel pkgconf
+
+    sudo dnf install systemd-devel
+
+Tested on Fedora 42 with KDE 6.3.4 and kernel: 6.14.0-63.fc42.x86_64
+
+Please email me at arsenmartirosyan@protonmail.com if you have ANY issues, I am more than happy to be of assistance.
+
 ## Features
 
 - **Difficulty Selection**: Four difficulties: Goober, Standard, Ultra-Violence, Not when, how.
@@ -57,9 +94,10 @@ A shoot 'em up game built in Rust using ggez.
 ## "Tech specs"
 
 - Built with Rust and ggez
-- Fullscreen, auto-scaling to your monitor
+- Auto-scaling to your monitor for fair gameplay
 - Modular codebase (entities, effects, weapons, menus, stats)
 - Save files for high score and statistics in `saves/`
+- Windows/osx/Linux (check above for fixes needed)
 
 ## Dependencies
 
@@ -68,4 +106,7 @@ A shoot 'em up game built in Rust using ggez.
 - `rand`: Random number generation
 - `serde`, `serde_json`: For saving/loading stats
 
-Thanks for reading!
+## Contact
+arsenmartirosyan@protonmail.com, please feel free to reach out with ANY and ALL feedback, questions, etc.
+
+Thanks for reading :)!
